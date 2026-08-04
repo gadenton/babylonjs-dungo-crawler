@@ -7,6 +7,12 @@
       "skillPath": ".claude/skills/babylonjs-engine/SKILL.md",
       "computedHash": "eb58751a5f852eb9fc6dead37bff30c06aa8bed98f2e6e84e076a9f77944d9c7"
     },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+    },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
