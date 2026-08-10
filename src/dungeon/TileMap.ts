@@ -172,25 +172,27 @@ export class TileMap {
         // ── Wall tiles ──
         if (cell.type === TileType.Wall) {
           const wallSelection = selectWallTile(grid, gx, gy);
-          const sources = this.templateMeshes.get(wallSelection.modelName) || this.templateMeshes.get("template-wall.glb") || [];
+          if (wallSelection !== null) {
+            const sources = this.templateMeshes.get(wallSelection.modelName) || this.templateMeshes.get("template-wall.glb") || [];
 
-          if (sources.length > 0) {
-            for (const src of sources) {
-              const inst = src.createInstance(`wall_${gx}_${gy}_${src.name}`);
-              inst.position.set(worldX, 0, worldZ);
-              inst.rotationQuaternion = null;
-              inst.rotation.set(0, wallSelection.yRotation, 0);
-              inst.parent = rootNode;
-              allInstances.push(inst);
+            if (sources.length > 0) {
+              for (const src of sources) {
+                const inst = src.createInstance(`wall_${gx}_${gy}_${src.name}`);
+                inst.position.set(worldX, 0, worldZ);
+                inst.rotationQuaternion = null;
+                inst.rotation.set(0, wallSelection.yRotation, 0);
+                inst.parent = rootNode;
+                allInstances.push(inst);
+              }
             }
-          }
-          wallCount++;
+            wallCount++;
 
-          // Invisible collision box for wall
-          const wc = CreateBox(`wc_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 2.0 }, this.scene);
-          wc.position.set(worldX, 1.5, worldZ);
-          wc.isVisible = false;
-          wallColliders.push(wc);
+            // Invisible collision box for wall
+            const wc = CreateBox(`wc_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 2.0 }, this.scene);
+            wc.position.set(worldX, 1.5, worldZ);
+            wc.isVisible = false;
+            wallColliders.push(wc);
+          }
         }
 
         // ── Door overlay (Use clean open gate.glb) ──

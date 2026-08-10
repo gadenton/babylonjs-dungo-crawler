@@ -46,9 +46,11 @@ export function getNeighborBitmask(grid: DungeonGrid, gx: number, gy: number): {
 
 /**
  * Selects the wall piece model name and Y-rotation angle based on the 8-neighbor bitmask.
+ * Returns null for diagonal-only cells (cardinalMask === 0) because the adjacent cardinal
+ * straight walls already fully enclose the room corner, preventing sticking-out wall fins.
  */
-export function selectWallTile(grid: DungeonGrid, gx: number, gy: number): TileSelection {
-  const { cardinalMask, fullMask } = getNeighborBitmask(grid, gx, gy);
+export function selectWallTile(grid: DungeonGrid, gx: number, gy: number): TileSelection | null {
+  const { cardinalMask } = getNeighborBitmask(grid, gx, gy);
 
   // Deterministic seed-based variation for straight wall details
   const detailHash = (gx * 47 + gy * 23 + grid.seed) % 100;
@@ -66,48 +68,38 @@ export function selectWallTile(grid: DungeonGrid, gx: number, gy: number): TileS
       return { modelName: straightWallModel, yRotation: (3 * Math.PI) / 2 };
 
     // ── Inner Corners (2 adjacent cardinal walkable neighbors) ──
-    case 3: // N + E walkable
+    case 3: // N + E walkable -> Inner corner facing NE
       return { modelName: "template-wall-corner.glb", yRotation: 0 };
-    case 6: // E + S walkable
+    case 6: // E + S walkable -> Inner corner facing SE
       return { modelName: "template-wall-corner.glb", yRotation: Math.PI / 2 };
-    case 12: // S + W walkable
+    case 12: // S + W walkable -> Inner corner facing SW
       return { modelName: "template-wall-corner.glb", yRotation: Math.PI };
-    case 9: // W + N walkable
+    case 9: // W + N walkable -> Inner corner facing NW
       return { modelName: "template-wall-corner.glb", yRotation: (3 * Math.PI) / 2 };
 
-    // ── End Caps / Stubs / Narrow Walls (3 or 4 cardinal walkable neighbors, or opposite pairs) ──
+    // ── T-Junctions / Narrow Walls / End Caps ──
+    // Use full-height straight wall pieces to prevent half-height gaps in wall lines
     case 5: // N + S walkable (opposite)
-      return { modelName: "template-wall-half.glb", yRotation: 0 };
+      return { modelName: "template-wall.glb", yRotation: 0 };
     case 10: // E + W walkable (opposite)
-      return { modelName: "template-wall-half.glb", yRotation: Math.PI / 2 };
+      return { modelName: "template-wall.glb", yRotation: Math.PI / 2 };
     case 7: // N + E + S walkable (W is wall)
-      return { modelName: "template-wall-half.glb", yRotation: Math.PI / 2 };
+      return { modelName: "template-wall.glb", yRotation: Math.PI / 2 };
     case 14: // E + S + W walkable (N is wall)
-      return { modelName: "template-wall-half.glb", yRotation: Math.PI };
+      return { modelName: "template-wall.glb", yRotation: Math.PI };
     case 13: // S + W + N walkable (E is wall)
-      return { modelName: "template-wall-half.glb", yRotation: (3 * Math.PI) / 2 };
+      return { modelName: "template-wall.glb", yRotation: (3 * Math.PI) / 2 };
     case 11: // W + N + E walkable (S is wall)
-      return { modelName: "template-wall-half.glb", yRotation: 0 };
+      return { modelName: "template-wall.glb", yRotation: 0 };
     case 15: // N + E + S + W walkable (isolated pillar)
       return { modelName: "template-wall-half.glb", yRotation: 0 };
 
-    // ── Outer Corners (0 cardinal walkable neighbors, check diagonal bits 4..7) ──
+    // ── Outer Corners / Diagonal-Only (0 cardinal walkable neighbors) ──
+    // The straight walls on adjacent cardinal cells ALREADY enclose the room corner.
+    // Returning null prevents placing a wall piece outside the room line into the corridor.
     case 0:
     default:
-      if (fullMask & 16) { // NE diagonal walkable
-        return { modelName: "template-wall-corner.glb", yRotation: 0 };
-      }
-      if (fullMask & 32) { // SE diagonal walkable
-        return { modelName: "template-wall-corner.glb", yRotation: Math.PI / 2 };
-      }
-      if (fullMask & 64) { // SW diagonal walkable
-        return { modelName: "template-wall-corner.glb", yRotation: Math.PI };
-      }
-      if (fullMask & 128) { // NW diagonal walkable
-        return { modelName: "template-wall-corner.glb", yRotation: (3 * Math.PI) / 2 };
-      }
-      // Fallback if no diagonals match
-      return { modelName: "template-wall.glb", yRotation: 0 };
+      return null;
   }
 }
 

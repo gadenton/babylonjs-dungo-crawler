@@ -52,6 +52,7 @@ export class HUD {
   private interactionPromptText: TextBlock;
 
   // Header Buttons
+  private mapButton: Button;
   private talentButton: Button;
   private inventoryButton: Button;
   private saveButton: Button;
@@ -251,16 +252,26 @@ export class HUD {
       hotbarGrid.addControl(slot, 0, i + 1);
     });
 
-    // 3. Top-Right Header Button Stack (Inventory [I], Talents [T], Saves [P])
+    // 3. Top-Right Header Button Stack (Map [M], Inventory [I], Talents [T], Saves [P])
     const buttonStack = new StackPanel("headerBtnStack");
     buttonStack.isVertical = false;
-    buttonStack.width = "400px";
+    buttonStack.width = "520px";
     buttonStack.height = "40px";
     buttonStack.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
     buttonStack.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
     buttonStack.left = "-15px";
     buttonStack.top = "15px";
     this.guiTexture.addControl(buttonStack);
+
+    this.mapButton = Button.CreateSimpleButton("mapBtn", "Map [M]");
+    this.mapButton.width = "120px";
+    this.mapButton.height = "38px";
+    this.mapButton.color = "#FFFFFF";
+    this.mapButton.background = "#7C3AED"; // Purple Accent
+    this.mapButton.cornerRadius = 6;
+    this.mapButton.fontSize = 13;
+    this.mapButton.fontWeight = "bold";
+    buttonStack.addControl(this.mapButton);
 
     this.inventoryButton = Button.CreateSimpleButton("invBtn", "Inventory [I]");
     this.inventoryButton.width = "125px";
@@ -341,6 +352,10 @@ export class HUD {
     this.updateLevelDisplay();
     this.updateArchetypeDisplay();
     this.updateGoldDisplay(this.player.inventory.gold);
+  }
+
+  public setOnMapButtonClick(callback: () => void): void {
+    this.mapButton.onPointerUpObservable.add(callback);
   }
 
   public setOnTalentButtonClick(callback: () => void): void {

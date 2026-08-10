@@ -17,6 +17,7 @@ import { ArchetypeUI } from "./ui/ArchetypeUI";
 import { InventoryUI } from "./ui/InventoryUI";
 import { SaveLoadUI } from "./ui/SaveLoadUI";
 import { HUD } from "./ui/HUD";
+import { MapOverlay } from "./ui/MapOverlay";
 import { LootDrop } from "./entities/LootDrop";
 import { VisualPipelineManager, GraphicsPreset } from "./rendering/VisualPipelineManager";
 import { SaveManager } from "./persistence/SaveManager";
@@ -104,10 +105,12 @@ async function bootstrap(): Promise<void> {
     const inventoryUI = new InventoryUI(scene, player, inputManager);
     const saveLoadUI = new SaveLoadUI(scene, player, inputManager);
     const hud = new HUD(scene, player, inputManager);
+    const mapOverlay = new MapOverlay(scene, player);
 
     const activeLootDrops: LootDrop[] = [];
 
     // Wire UI Toggle Handlers
+    hud.setOnMapButtonClick(() => mapOverlay.toggleOverlay());
     hud.setOnTalentButtonClick(() => talentUI.toggle());
     hud.setOnInventoryButtonClick(() => inventoryUI.toggle());
     hud.setOnSaveButtonClick(() => saveLoadUI.toggle());
@@ -123,7 +126,10 @@ async function bootstrap(): Promise<void> {
 
     // Keyboard shortcut listeners for UI overlays & visual presets
     window.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.code === "KeyT") {
+      if (e.code === "KeyM" || e.code === "Tab") {
+        e.preventDefault();
+        mapOverlay.toggleOverlay();
+      } else if (e.code === "KeyT") {
         talentUI.toggle();
       } else if (e.code === "KeyI") {
         inventoryUI.toggle();
@@ -146,6 +152,7 @@ async function bootstrap(): Promise<void> {
         if (archetypeUI.isCurrentlyVisible) archetypeUI.hide();
         if (inventoryUI.isCurrentlyVisible) inventoryUI.hide();
         if (saveLoadUI.isVisible()) saveLoadUI.hide();
+        mapOverlay.setOverlayVisible(false);
       }
     });
 
@@ -171,6 +178,8 @@ async function bootstrap(): Promise<void> {
 
       const generator = new Generator({ width: 40, height: 40 });
       const dungeonGrid = generator.generate();
+
+      mapOverlay.setGrid(dungeonGrid);
 
       tileMap = new TileMap(scene);
       const builtDungeon = await tileMap.buildFromGrid(dungeonGrid);
@@ -286,6 +295,7 @@ async function bootstrap(): Promise<void> {
     inputManager.update(deltaTime);
     player.update(deltaTime, enemies, juiceOverlay, audioManager);
     hud.update(deltaTime);
+    mapOverlay.update(deltaTime, enemies);
 
     // Update active 3D Loot Drops (Rotation, Bobbing, 3.0m Proximity Vacuum Magnet)
     for (let i = activeLootDrops.length - 1; i >= 0; i--) {
@@ -333,6 +343,7 @@ async function bootstrap(): Promise<void> {
     talentUI.dispose();
     archetypeUI.dispose();
     inventoryUI.dispose();
+    mapOverlay.dispose();
     hud.dispose();
     juiceOverlay.dispose();
     audioManager.dispose();
