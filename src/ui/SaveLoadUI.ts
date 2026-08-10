@@ -142,10 +142,11 @@ export class SaveLoadUI {
     card.paddingBottom = "6px";
     parent.addControl(card);
 
-    const cardContent = new StackPanel(`cardContent_${slotId}`);
-    cardContent.isVertical = false;
+    const cardContent = new Rectangle(`cardContent_${slotId}`);
     cardContent.width = "100%";
     cardContent.height = "100%";
+    cardContent.thickness = 0;
+    cardContent.background = "rgba(0,0,0,0)";
     card.addControl(cardContent);
 
     // Left info column
@@ -154,7 +155,17 @@ export class SaveLoadUI {
     infoStack.width = "65%";
     infoStack.height = "100%";
     infoStack.paddingLeft = "15px";
+    infoStack.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     cardContent.addControl(infoStack);
+
+    // Right Action Buttons column
+    const btnStack = new StackPanel(`btnStack_${slotId}`);
+    btnStack.isVertical = false;
+    btnStack.width = "35%";
+    btnStack.height = "100%";
+    btnStack.paddingRight = "10px";
+    btnStack.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    cardContent.addControl(btnStack);
 
     const slotTitle = new TextBlock(`slotTitle_${slotId}`, titleLabel);
     slotTitle.color = isAutoSave ? "#87CEFA" : "#FFD700";
@@ -170,15 +181,6 @@ export class SaveLoadUI {
     slotDesc.height = "36px";
     slotDesc.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     infoStack.addControl(slotDesc);
-
-    // Right Action Buttons column
-    const btnStack = new StackPanel(`btnStack_${slotId}`);
-    btnStack.isVertical = false;
-    btnStack.width = "35%";
-    btnStack.height = "100%";
-    btnStack.paddingRight = "10px";
-    btnStack.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
-    cardContent.addControl(btnStack);
 
     this.slotPanels.set(slotId, card);
     this.slotTexts.set(slotId, slotDesc);
