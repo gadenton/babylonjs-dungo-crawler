@@ -3,8 +3,11 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Vector3, Quaternion } from "@babylonjs/core/Maths/math.vector";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { CreateCapsule } from "@babylonjs/core/Meshes/Builders/capsuleBuilder";
 import { Observable, Observer } from "@babylonjs/core/Misc/observable";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
+import "@babylonjs/loaders/glTF";
+
 import { Entity } from "./Entity";
 import { InputManager } from "../core/InputManager";
 import { NavMeshManager } from "../dungeon/NavMeshManager";
@@ -34,6 +37,14 @@ export class Player extends Entity {
   // Observables
   public readonly onLevelUp: Observable<number> = new Observable<number>();
   public readonly onArchetypeSwapped: Observable<ArchetypeDefinition> = new Observable<ArchetypeDefinition>();
+  public readonly onModelLoaded: Observable<Mesh> = new Observable<Mesh>();
+
+  // Animation System State
+  private animationGroups: Map<string, AnimationGroup> = new Map();
+  private currentAnimName: string | null = null;
+  private isAttacking: boolean = false;
+  private attackTimer: number = 0;
+  public modelUrl: string = "assets/characters/player/character-male-a.glb";
 
   // Movement Specs
   private moveSpeed: number = 7.0; // Speed in meters/sec
@@ -52,26 +63,24 @@ export class Player extends Entity {
   private moveVectorObserver: Observer<Vector3> | null = null;
   private pointerClickObserver: Observer<Vector3> | null = null;
 
-  constructor(id: string, scene: Scene, customMesh?: Mesh) {
+  constructor(id: string, scene: Scene, customMesh?: Mesh, modelUrl?: string) {
     super(id, "Player", scene);
 
     const rootMesh = new Mesh(`playerRoot_${id}`, scene);
     this.transformNode.dispose();
     this.transformNode = rootMesh;
 
+    if (modelUrl) {
+      this.modelUrl = modelUrl;
+    }
+
     if (customMesh) {
       this.mesh = customMesh;
       this.mesh.parent = this.transformNode;
     } else {
-      this.mesh = CreateCapsule("playerMesh", { height: 1.8, radius: 0.4 }, scene);
-      this.mesh.position = new Vector3(0, 0.9, 0);
+      this.mesh = new Mesh(`playerMeshContainer_${id}`, scene);
       this.mesh.parent = this.transformNode;
-
-      const playerMat = new StandardMaterial("playerMat", scene);
-      playerMat.diffuseColor = new Color3(0.23, 0.51, 0.96); // Vibrant Blue #3B82F6
-      playerMat.emissiveColor = new Color3(0.05, 0.15, 0.35);
-      playerMat.specularPower = 64;
-      this.mesh.material = playerMat;
+      this.loadModelAsync(this.modelUrl);
     }
 
     this.stats = new StatsComponent({
@@ -94,10 +103,12 @@ export class Player extends Entity {
 
     this.stats.onDeath.add(() => {
       this.isAlive = false;
+      this.playAnimation("die", false);
     });
 
     this.health.onDeath.add(() => {
       this.isAlive = false;
+      this.playAnimation("die", false);
     });
 
     // Initialize TalentTree and active Archetype
@@ -105,6 +116,80 @@ export class Player extends Entity {
     this.setArchetype("tank");
 
     this.setupEllipsoidCollision();
+  }
+
+  public async loadModelAsync(url: string): Promise<void> {
+    const cleanUrl = url.startsWith("public/") ? url.substring(7) : url;
+    const result = await SceneLoader.ImportMeshAsync("", "", cleanUrl, this.scene);
+    if (!result.meshes || result.meshes.length === 0) {
+      throw new Error(`[Player] Failed to load model from ${cleanUrl}: No meshes returned.`);
+    }
+
+    if (this.mesh) {
+      this.mesh.dispose();
+    }
+
+    const loadedRoot = result.meshes[0] as Mesh;
+    loadedRoot.parent = this.transformNode;
+    loadedRoot.position = Vector3.Zero();
+    loadedRoot.scaling = new Vector3(1, 1, 1);
+    this.mesh = loadedRoot;
+
+    // Register animation groups
+    this.animationGroups.clear();
+    for (const group of result.animationGroups) {
+      group.stop();
+      this.animationGroups.set(group.name.toLowerCase(), group);
+    }
+
+    // Play default idle animation
+    this.playAnimation("idle", true);
+
+    this.onModelLoaded.notifyObservers(this.mesh);
+  }
+
+  public playAnimation(name: string, loop: boolean = true, speedRatio: number = 1.0): boolean {
+    const key = name.toLowerCase();
+    const animGroup = this.animationGroups.get(key);
+    if (!animGroup) return false;
+
+    if (this.currentAnimName === key && animGroup.isPlaying) {
+      return true;
+    }
+
+    if (this.currentAnimName && this.currentAnimName !== key) {
+      const currentGroup = this.animationGroups.get(this.currentAnimName);
+      if (currentGroup) {
+        currentGroup.stop();
+      }
+    }
+
+    this.currentAnimName = key;
+    animGroup.start(loop, speedRatio, animGroup.from, animGroup.to, false);
+    return true;
+  }
+
+  public triggerAttackAnimation(): void {
+    if (!this.isAlive) return;
+    const attackAnimName = Math.random() > 0.5 ? "attack-melee-right" : "attack-melee-left";
+    const animGroup = this.animationGroups.get(attackAnimName) ?? this.animationGroups.get("attack-melee-right");
+
+    if (animGroup) {
+      if (this.currentAnimName && this.currentAnimName !== attackAnimName) {
+        const currentGroup = this.animationGroups.get(this.currentAnimName);
+        if (currentGroup) currentGroup.stop();
+      }
+
+      this.isAttacking = true;
+      this.currentAnimName = attackAnimName;
+      this.attackTimer = 0.45; // ~450ms animation duration
+
+      animGroup.start(false, 1.3, animGroup.from, animGroup.to, false);
+      animGroup.onAnimationEndObservable.addOnce(() => {
+        this.isAttacking = false;
+        this.currentAnimName = null;
+      });
+    }
   }
 
   public setupEllipsoidCollision(): void {
@@ -220,6 +305,7 @@ export class Player extends Entity {
 
   public performAttack(targetEnemy?: Enemy): boolean {
     if (!this.isAlive) return false;
+    this.triggerAttackAnimation();
     if (targetEnemy && targetEnemy.isAlive) {
       const dist = Vector3.Distance(this.position, targetEnemy.position);
       if (dist <= 2.5) {
@@ -262,6 +348,7 @@ export class Player extends Entity {
         const check = skillToCast.canCast(this.stats);
         if (check.possible) {
           const targetPos = bufferedInput.targetPos ?? this.transformNode.position;
+          this.triggerAttackAnimation();
           skillToCast.execute(this, targetPos, potentialTargets, juice, audio);
           return true; // Skill executed successfully, consume from buffer
         }
@@ -330,6 +417,23 @@ export class Player extends Entity {
 
       const rotFactor = 1.0 - Math.exp(-this.rotationSpeed * deltaTime);
       Quaternion.SlerpToRef(this.mesh.rotationQuaternion, targetQuat, rotFactor, this.mesh.rotationQuaternion);
+    }
+
+    // Handle attack timer safety unlock
+    if (this.isAttacking) {
+      this.attackTimer -= deltaTime;
+      if (this.attackTimer <= 0) {
+        this.isAttacking = false;
+      }
+    }
+
+    // Animation state machine: update walk / idle animation based on movement state
+    if (this.isAlive && !this.isAttacking) {
+      if (this.currentVelocity.lengthSquared() > 0.1) {
+        this.playAnimation("walk", true, 1.2);
+      } else {
+        this.playAnimation("idle", true, 1.0);
+      }
     }
   }
 

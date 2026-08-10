@@ -163,6 +163,13 @@ async function bootstrap(): Promise<void> {
     if (shadowGen) {
       shadowGen.addShadowCaster(player.getMesh());
       shadowGen.addShadowCaster(townHubAltar.mesh);
+      player.onModelLoaded.add((loadedMesh) => {
+        shadowGen.addShadowCaster(loadedMesh);
+        const children = loadedMesh.getChildMeshes();
+        for (const child of children) {
+          shadowGen.addShadowCaster(child);
+        }
+      });
     }
 
     // Dynamic Dungeon Entry Transition Handler
