@@ -3,22 +3,75 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Babylon.js App</title>
+    <title>Babylon.js Dungeon Crawler ARPG</title>
     <style>
         body {
             margin: 0;
             padding: 0;
+            background-color: #0b0f19;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden;
         }
 
         #renderCanvas {
             display: block;
-            width: 100dvw;
-            height: 100dvh;
+            width: 100vw;
+            height: 100vh;
             touch-action: none;
+        }
+
+        #loadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(10, 14, 23, 0.96);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.4s ease;
+        }
+
+        #loadingTitle {
+            font-size: 26px;
+            font-weight: bold;
+            color: #daa520;
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        #loadingStatus {
+            font-size: 16px;
+            color: #87cefa;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+
+        #loadingError {
+            font-size: 14px;
+            color: #ef4444;
+            max-width: 80%;
+            text-align: center;
+            white-space: pre-wrap;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 12px 18px;
+            border-radius: 6px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            display: none;
         }
     </style>
 </head>
 <body>
+    <div id="loadingOverlay">
+        <div id="loadingTitle">Dungeon Crawler ARPG</div>
+        <div id="loadingStatus">Initializing game engine...</div>
+        <div id="loadingError"></div>
+    </div>
     <canvas id="renderCanvas"></canvas>
     <script type="module" src="/src/index.ts"></script>
 </body>
