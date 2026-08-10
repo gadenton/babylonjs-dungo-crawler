@@ -1,25 +1,23 @@
-import { Scene } from "@babylonjs/core/scene";
-import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { Vector3, Quaternion } from "@babylonjs/core/Maths/math.vector";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import { Observable, Observer } from "@babylonjs/core/Misc/observable";
-import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { Observable, Observer } from "@babylonjs/core/Misc/observable";
+import { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders/glTF";
 
-import { Entity } from "./Entity";
+import { AudioManager } from "../audio/AudioManager";
+import { ArchetypeDefinition, ArchetypeManager, ArchetypeType } from "../combat/Archetypes";
+import { Skill } from "../combat/Skill";
+import { TalentTree } from "../combat/TalentTree";
 import { InputManager } from "../core/InputManager";
 import { NavMeshManager } from "../dungeon/NavMeshManager";
-import { StatsComponent, StatType } from "./components/StatsComponent";
+import { JuiceOverlay } from "../ui/JuiceOverlay";
 import { HealthComponent } from "./components/HealthComponent";
 import { InventoryComponent } from "./components/InventoryComponent";
+import { StatsComponent, StatType } from "./components/StatsComponent";
 import { Enemy } from "./Enemy";
-import { Skill } from "../combat/Skill";
-import { ArchetypeType, ArchetypeManager, ArchetypeDefinition } from "../combat/Archetypes";
-import { TalentTree } from "../combat/TalentTree";
-import { JuiceOverlay } from "../ui/JuiceOverlay";
-import { AudioManager } from "../audio/AudioManager";
+import { Entity } from "./Entity";
 
 export class Player extends Entity {
   public mesh: Mesh;
@@ -45,7 +43,7 @@ export class Player extends Entity {
   private isAttacking: boolean = false;
   private attackTimer: number = 0;
   public modelUrl: string = "assets/characters/player/character-male-a.glb";
-  private modelScale: number = 1.4; // 1.4x default scale for main character prominence
+  private modelScale: number = 1.5; // 1.5x default scale for main character prominence
 
   // Movement Specs
   private moveSpeed: number = 7.0; // Speed in meters/sec
