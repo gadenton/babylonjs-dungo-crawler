@@ -184,7 +184,7 @@ export class TownHub {
           }
         }
 
-        // Directional perimeter wall collision boxes aligned with visual stone wall faces
+        // Directional perimeter wall collision boxes aligned with visual stone wall faces (at worldX / worldZ tile center lines)
         if (gy !== gridHeight - 1 || (gx !== 4 && gx !== 5)) {
           let boxWidth = 2.0;
           let boxDepth = 2.0;

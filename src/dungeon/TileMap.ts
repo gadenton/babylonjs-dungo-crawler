@@ -188,15 +188,40 @@ export class TileMap {
             wallCount++;
           }
 
-          // Directional wall colliders aligned with visual stone wall faces
-          const { cardinalMask } = getNeighborBitmask(grid, gx, gy);
+          // Directional wall colliders aligned with visual stone wall faces (at worldX / worldZ tile center lines)
+          const { cardinalMask, fullMask } = getNeighborBitmask(grid, gx, gy);
 
           if (cardinalMask === 0) {
-            // Solid interior wall block
-            const wc = CreateBox(`wc_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 2.0 }, this.scene);
-            wc.position.set(worldX, 1.5, worldZ);
-            wc.isVisible = false;
-            wallColliders.push(wc);
+            if (fullMask === 0) {
+              // Solid deep interior block
+              const wc = CreateBox(`wc_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 2.0 }, this.scene);
+              wc.position.set(worldX, 1.5, worldZ);
+              wc.isVisible = false;
+              wallColliders.push(wc);
+            } else {
+              // Diagonal-only corner block: trim box to non-floor quadrant matching visual stone wall faces
+              let minX = worldX - 1.0;
+              let maxX = worldX + 1.0;
+              let minZ = worldZ - 1.0;
+              let maxZ = worldZ + 1.0;
+
+              if (fullMask & 16) { maxX = worldX; maxZ = worldZ; }       // NE walkable -> SW box
+              if (fullMask & 32) { maxX = worldX; minZ = worldZ; }       // SE walkable -> NW box
+              if (fullMask & 64) { minX = worldX; minZ = worldZ; }       // SW walkable -> NE box
+              if (fullMask & 128) { minX = worldX; maxZ = worldZ; }      // NW walkable -> SE box
+
+              const width = maxX - minX;
+              const depth = maxZ - minZ;
+              const posX = (minX + maxX) / 2;
+              const posZ = (minZ + maxZ) / 2;
+
+              if (width > 0.01 && depth > 0.01) {
+                const wc = CreateBox(`wc_diag_${gx}_${gy}`, { width, height: 3.0, depth }, this.scene);
+                wc.position.set(posX, 1.5, posZ);
+                wc.isVisible = false;
+                wallColliders.push(wc);
+              }
+            }
           } else if (cardinalMask === 3) {
             // Inner corner N + E walkable -> stone corner in SW quadrant
             const wc = CreateBox(`wc_c3_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 1.0 }, this.scene);
@@ -222,28 +247,49 @@ export class TileMap {
             wc.isVisible = false;
             wallColliders.push(wc);
           } else {
-            // Straight wall / T-junction / end-cap directional wall colliders
-            if (cardinalMask & 1) {
-              const wcN = CreateBox(`wc_N_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 1.0 }, this.scene);
-              wcN.position.set(worldX, 1.5, worldZ - 0.5);
+            // Straight wall / T-junction / end-cap directional wall colliders spanning continuously to adjacent wall faces
+            const isNorthWall = gy + 1 < grid.height && grid.cells[gy + 1][gx].type === TileType.Wall;
+            const isSouthWall = gy - 1 >= 0 && grid.cells[gy - 1][gx].type === TileType.Wall;
+            const isEastWall = gx + 1 < grid.width && grid.cells[gy][gx + 1].type === TileType.Wall;
+            const isWestWall = gx - 1 >= 0 && grid.cells[gy][gx - 1].type === TileType.Wall;
+
+            if (cardinalMask & 1) { // N is walkable (floor at +Z): stone face at Z = worldZ
+              const minX = isWestWall ? worldX - 2.0 : worldX - 1.0;
+              const maxX = isEastWall ? worldX + 2.0 : worldX + 1.0;
+              const width = maxX - minX;
+              const posX = (minX + maxX) / 2;
+              const wcN = CreateBox(`wc_N_${gx}_${gy}`, { width, height: 3.0, depth: 1.0 }, this.scene);
+              wcN.position.set(posX, 1.5, worldZ - 0.5);
               wcN.isVisible = false;
               wallColliders.push(wcN);
             }
-            if (cardinalMask & 2) {
-              const wcE = CreateBox(`wc_E_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 2.0 }, this.scene);
-              wcE.position.set(worldX - 0.5, 1.5, worldZ);
+            if (cardinalMask & 2) { // E is walkable (floor at +X): stone face at X = worldX
+              const minZ = isSouthWall ? worldZ - 2.0 : worldZ - 1.0;
+              const maxZ = isNorthWall ? worldZ + 2.0 : worldZ + 1.0;
+              const depth = maxZ - minZ;
+              const posZ = (minZ + maxZ) / 2;
+              const wcE = CreateBox(`wc_E_${gx}_${gy}`, { width: 1.0, height: 3.0, depth }, this.scene);
+              wcE.position.set(worldX - 0.5, 1.5, posZ);
               wcE.isVisible = false;
               wallColliders.push(wcE);
             }
-            if (cardinalMask & 4) {
-              const wcS = CreateBox(`wc_S_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 1.0 }, this.scene);
-              wcS.position.set(worldX, 1.5, worldZ + 0.5);
+            if (cardinalMask & 4) { // S is walkable (floor at -Z): stone face at Z = worldZ
+              const minX = isWestWall ? worldX - 2.0 : worldX - 1.0;
+              const maxX = isEastWall ? worldX + 2.0 : worldX + 1.0;
+              const width = maxX - minX;
+              const posX = (minX + maxX) / 2;
+              const wcS = CreateBox(`wc_S_${gx}_${gy}`, { width, height: 3.0, depth: 1.0 }, this.scene);
+              wcS.position.set(posX, 1.5, worldZ + 0.5);
               wcS.isVisible = false;
               wallColliders.push(wcS);
             }
-            if (cardinalMask & 8) {
-              const wcW = CreateBox(`wc_W_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 2.0 }, this.scene);
-              wcW.position.set(worldX + 0.5, 1.5, worldZ);
+            if (cardinalMask & 8) { // W is walkable (floor at -X): stone face at X = worldX
+              const minZ = isSouthWall ? worldZ - 2.0 : worldZ - 1.0;
+              const maxZ = isNorthWall ? worldZ + 2.0 : worldZ + 1.0;
+              const depth = maxZ - minZ;
+              const posZ = (minZ + maxZ) / 2;
+              const wcW = CreateBox(`wc_W_${gx}_${gy}`, { width: 1.0, height: 3.0, depth }, this.scene);
+              wcW.position.set(worldX + 0.5, 1.5, posZ);
               wcW.isVisible = false;
               wallColliders.push(wcW);
             }
