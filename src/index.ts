@@ -11,6 +11,7 @@ import { DamageSystem, DamageAppliedEvent } from "./combat/DamageSystem";
 import { JuiceOverlay } from "./ui/JuiceOverlay";
 import { AudioManager } from "./audio/AudioManager";
 import { TownHubAltar } from "./entities/TownHubAltar";
+import { DungeonPortal } from "./entities/DungeonPortal";
 import { TownHub } from "./town/TownHub";
 import { TalentUI } from "./ui/TalentUI";
 import { ArchetypeUI } from "./ui/ArchetypeUI";
@@ -18,6 +19,7 @@ import { InventoryUI } from "./ui/InventoryUI";
 import { SaveLoadUI } from "./ui/SaveLoadUI";
 import { HUD } from "./ui/HUD";
 import { MapOverlay } from "./ui/MapOverlay";
+import { DungeonPortalUI } from "./ui/DungeonPortalUI";
 import { LootDrop } from "./entities/LootDrop";
 import { VisualPipelineManager, GraphicsPreset } from "./rendering/VisualPipelineManager";
 import { SaveManager } from "./persistence/SaveManager";
@@ -39,24 +41,14 @@ async function bootstrap(): Promise<void> {
       errorEl.innerText = msg;
       errorEl.style.display = "block";
     }
-    if (statusEl) {
-      statusEl.innerText = "Initialization failed!";
-      statusEl.style.color = "#ef4444";
-    }
   };
 
-  if (!canvas) {
-    showError("Failed to find #renderCanvas element in DOM.");
-    return;
-  }
-
   try {
-    // 1. Initialize Core Game Engine & Scene
-    setStatus("1/8 Initializing Game Engine & Scene...");
+    // 1. Initialize Engine & Scene
+    setStatus("1/8 Initializing WebGL Engine & Scene...");
     const gameEngine = new GameEngine({
       canvas,
       antialias: true,
-      preserveDrawingBuffer: true,
       stencil: true,
     });
     const scene = gameEngine.getScene();
@@ -76,20 +68,23 @@ async function bootstrap(): Promise<void> {
     const player = new Player("p1", scene);
 
     // 3. Initialize Visual Post-Processing Pipeline
-    setStatus("3/8 Initializing Visual Pipeline (SSAO2, Bloom, ACES Tone Mapping)...");
+    setStatus("3/8 Initializing Visual Pipeline...");
     const visualPipelineManager = new VisualPipelineManager(
       scene,
       cameraRig.getCamera(),
       "high"
     );
 
-    // 4. Build Static Town Hub Plaza (10x10 Area)
+    // 4. Build Static Town Hub Plaza
     setStatus("4/8 Building Static Town Hub Plaza...");
     const townHub = new TownHub(scene);
     console.time("[Index] TownHub build");
     const builtTown = await townHub.build();
     console.timeEnd("[Index] TownHub build");
     const townHubAltar = builtTown.altar;
+
+    // Spawn Dungeon Portal in Town Hub Plaza (near altar)
+    const dungeonPortal = new DungeonPortal("dungeonPortal", scene, new Vector3(4.5, 0, 4.5));
 
     // 5. Position Player & Attach Camera in Town Hub
     setStatus("5/8 Spawning Player in Town Hub...");
@@ -106,6 +101,7 @@ async function bootstrap(): Promise<void> {
     const saveLoadUI = new SaveLoadUI(scene, player, inputManager);
     const hud = new HUD(scene, player, inputManager);
     const mapOverlay = new MapOverlay(scene, player);
+    const dungeonPortalUI = new DungeonPortalUI(scene);
 
     const activeLootDrops: LootDrop[] = [];
 
@@ -116,7 +112,7 @@ async function bootstrap(): Promise<void> {
     hud.setOnSaveButtonClick(() => saveLoadUI.toggle());
     inputManager.onInventoryToggleRequested.add(() => inventoryUI.toggle());
 
-    // Connect Save UI Toast Notifications to HUD Notification Banner
+    // Connect Save UI Toast Notifications
     saveLoadUI.onNotification.add((msg) => {
       hud.showPickupNotification(msg, "#87CEFA");
     });
@@ -124,7 +120,7 @@ async function bootstrap(): Promise<void> {
     // Wire Auto-Save Listeners
     const unbindAutoSave = SaveManager.registerAutoSaveEvents(player);
 
-    // Keyboard shortcut listeners for UI overlays & visual presets
+    // Keyboard shortcut listeners for UI overlays & interactions
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.code === "KeyM" || e.code === "Tab") {
         e.preventDefault();
@@ -144,7 +140,9 @@ async function bootstrap(): Promise<void> {
         console.log(`[VisualPipelineManager] ${msg}`);
         hud.showPickupNotification(msg, "#A78BFA");
       } else if (e.code === "KeyE" || e.code === "KeyF") {
-        if (townHubAltar.isPlayerInProximity(player.position)) {
+        if (!inDungeon && dungeonPortal.isPlayerInProximity(player.position)) {
+          dungeonPortal.interact();
+        } else if (townHubAltar.isPlayerInProximity(player.position)) {
           townHubAltar.interact();
         }
       } else if (e.code === "Escape") {
@@ -152,6 +150,7 @@ async function bootstrap(): Promise<void> {
         if (archetypeUI.isCurrentlyVisible) archetypeUI.hide();
         if (inventoryUI.isCurrentlyVisible) inventoryUI.hide();
         if (saveLoadUI.isVisible()) saveLoadUI.hide();
+        if (dungeonPortalUI.isVisible) dungeonPortalUI.hide();
         mapOverlay.setOverlayVisible(false);
       }
     });
@@ -171,12 +170,14 @@ async function bootstrap(): Promise<void> {
     let tileMap: TileMap | null = null;
     let navMeshManager: NavMeshManager | null = null;
 
-    const transitionToDungeon = async () => {
+    const transitionToDungeon = async (customSeed?: number) => {
       if (inDungeon) return;
       inDungeon = true;
-      hud.showPickupNotification("Entering Procedural Dungeon...", "#3B82F6");
 
-      const generator = new Generator({ width: 40, height: 40 });
+      const seedMsg = customSeed !== undefined ? `Seed: ${customSeed}` : "Random Seed";
+      hud.showPickupNotification(`Entering Procedural Dungeon (${seedMsg})...`, "#3B82F6");
+
+      const generator = new Generator({ seed: customSeed, minWidth: 55, maxWidth: 75, minHeight: 55, maxHeight: 75 });
       const dungeonGrid = generator.generate();
 
       mapOverlay.setGrid(dungeonGrid);
@@ -195,7 +196,7 @@ async function bootstrap(): Promise<void> {
 
       for (let i = 1; i < dungeonGrid.rooms.length; i++) {
         const room = dungeonGrid.rooms[i];
-        const spawnPos = new Vector3(room.centerX * 2.0, 0, room.centerY * 2.0);
+        const spawnPos = new Vector3(room.centerX * 2.0 + 1.0, 0, room.centerY * 2.0 + 1.0);
         const enemy = new Enemy(`enemy_${i}`, `Orc_${i}`, scene, spawnPos, {
           modelUrl: "assets/characters/enemies/character-orc.glb",
           maxHp: 60,
@@ -234,137 +235,152 @@ async function bootstrap(): Promise<void> {
       }
     };
 
-    townHubAltar.onInteract.add(() => {
-      archetypeUI.toggle();
+    // Wire Portal Interaction -> Open Portal UI Modal
+    dungeonPortal.onInteract.add(() => {
+      dungeonPortalUI.show();
+    });
+
+    dungeonPortalUI.onEnterDungeon.add((seed) => {
       if (!inDungeon) {
-        transitionToDungeon();
+        transitionToDungeon(seed);
       }
     });
 
-  // 12. Wire Player Attack Action
-  const handlePlayerAttack = (targetEnemy?: Enemy) => {
-    let target = targetEnemy;
-    if (!target) {
-      let minDist = 2.5; // Melee attack range
-      for (const enemy of enemies) {
-        if (enemy.isAlive && enemy.health.isAlive) {
-          const dist = Vector3.Distance(player.position, enemy.position);
-          if (dist < minDist) {
-            minDist = dist;
-            target = enemy;
+    // Wire Class Altar Interaction -> Open Archetype UI Modal
+    townHubAltar.onInteract.add(() => {
+      archetypeUI.toggle();
+    });
+
+    // Wire Player Attack Action
+    const handlePlayerAttack = (targetEnemy?: Enemy) => {
+      let target = targetEnemy;
+      if (!target) {
+        let minDist = 2.5; // Melee attack range
+        for (const enemy of enemies) {
+          if (enemy.isAlive && enemy.health.isAlive) {
+            const dist = Vector3.Distance(player.position, enemy.position);
+            if (dist < minDist) {
+              minDist = dist;
+              target = enemy;
+            }
           }
         }
       }
-    }
 
-    if (target && target.isAlive && target.health.isAlive) {
-      if (player.performAttack(target)) {
+      if (target && target.isAlive && target.health.isAlive) {
+        if (player.performAttack(target)) {
+          audioManager.playSwingSFX();
+          DamageSystem.resolveDamage(player, target);
+        }
+      } else {
         audioManager.playSwingSFX();
-        DamageSystem.resolveDamage(player, target);
       }
-    } else {
-      audioManager.playSwingSFX();
-    }
-  };
+    };
 
-  // Pointer click on enemy direct attack check
-  scene.onPointerDown = (evt, pickResult) => {
-    if (evt.button === 0 && pickResult && pickResult.hit && pickResult.pickedMesh) {
-      const pickedMesh = pickResult.pickedMesh;
-      for (const enemy of enemies) {
-        if (enemy.isAlive && (pickedMesh === enemy.mesh || pickedMesh.isDescendantOf(enemy.transformNode))) {
-          handlePlayerAttack(enemy);
-          break;
+    // Pointer click on enemy direct attack check
+    scene.onPointerDown = (evt, pickResult) => {
+      if (evt.button === 0 && pickResult && pickResult.hit && pickResult.pickedMesh) {
+        const pickedMesh = pickResult.pickedMesh;
+        for (const enemy of enemies) {
+          if (enemy.isAlive && (pickedMesh === enemy.mesh || pickedMesh.isDescendantOf(enemy.transformNode))) {
+            handlePlayerAttack(enemy);
+            break;
+          }
         }
       }
-    }
-  };
+    };
 
-  // 13. Main Render Loop Setup
-  gameEngine.setRenderLoopCallback(() => {
-    const rawDeltaTime = gameEngine.getEngine().getDeltaTime() / 1000.0;
-    if (rawDeltaTime <= 0) return;
+    // 7. Main Render Loop Setup
+    setStatus("7/8 Starting Main Game Engine Render Loop...");
+    gameEngine.setRenderLoopCallback(() => {
+      const rawDeltaTime = gameEngine.getEngine().getDeltaTime() / 1000.0;
+      if (rawDeltaTime <= 0) return;
 
-    // Update Juice Overlay Floating Numbers and Flashes
-    juiceOverlay.update(rawDeltaTime);
+      juiceOverlay.update(rawDeltaTime);
 
-    // Micro-pause gameplay logic updates during hit-stop freeze frame
-    if (juiceOverlay.isHitStopped()) return;
+      if (juiceOverlay.isHitStopped()) return;
 
-    const deltaTime = rawDeltaTime;
-    inputManager.update(deltaTime);
-    player.update(deltaTime, enemies, juiceOverlay, audioManager);
-    hud.update(deltaTime);
-    mapOverlay.update(deltaTime, enemies);
+      const deltaTime = rawDeltaTime;
+      inputManager.update(deltaTime);
+      player.update(deltaTime, enemies, juiceOverlay, audioManager);
+      hud.update(deltaTime);
+      mapOverlay.update(deltaTime, enemies);
+      if (!inDungeon) dungeonPortal.update(deltaTime);
 
-    // Update active 3D Loot Drops (Rotation, Bobbing, 3.0m Proximity Vacuum Magnet)
-    for (let i = activeLootDrops.length - 1; i >= 0; i--) {
-      const drop = activeLootDrops[i];
-      if (drop.isPickedUp) {
-        activeLootDrops.splice(i, 1);
+      // Active 3D Loot Drops
+      for (let i = activeLootDrops.length - 1; i >= 0; i--) {
+        const drop = activeLootDrops[i];
+        if (drop.isPickedUp) {
+          activeLootDrops.splice(i, 1);
+        } else {
+          drop.update(deltaTime, player, juiceOverlay, audioManager);
+        }
+      }
+
+      // Proximity Checks for Town Entities
+      if (!inDungeon && dungeonPortal.isPlayerInProximity(player.position)) {
+        hud.showInteractionPrompt("Press [E] or (A) to Enter Dungeon Portal");
+      } else if (townHubAltar.isPlayerInProximity(player.position)) {
+        hud.showInteractionPrompt("Press [E] or (A) to Access Class Altar");
       } else {
-        drop.update(deltaTime, player, juiceOverlay, audioManager);
+        hud.hideInteractionPrompt();
       }
-    }
 
-    // Altar Proximity Check
-    if (townHubAltar.isPlayerInProximity(player.position)) {
-      hud.showInteractionPrompt("Press [E] or (A) to Access Archetype Altar");
-    } else {
-      hud.hideInteractionPrompt();
-    }
-
-    // Update Enemy AI FSMs
-    for (const enemy of enemies) {
-      if (enemy.isAlive) {
-        enemy.update(deltaTime, player);
+      // Update Enemy AI FSMs
+      for (const enemy of enemies) {
+        if (enemy.isAlive) {
+          enemy.update(deltaTime, player);
+        }
       }
+
+      // Update Camera Rig
+      cameraRig.update(deltaTime, player.getVelocity(), player.getFacingDirection());
+
+      // Update 3D Spatial Audio Listener Position
+      const activeCamera = scene.activeCamera;
+      if (activeCamera) {
+        const forward = activeCamera.getForwardRay().direction;
+        audioManager.updateListener(activeCamera.position, forward);
+      }
+    });
+
+    // 8. Lifecycle & Overlay Hide
+    setStatus("8/8 Initialization Complete! Welcome to Town Hub!");
+    if (overlayEl) {
+      overlayEl.style.opacity = "0";
+      overlayEl.style.pointerEvents = "none";
+      setTimeout(() => {
+        overlayEl.style.display = "none";
+      }, 500);
     }
 
-    // Update Camera Rig with exponential smoothing & look-ahead
-    cameraRig.update(deltaTime, player.getVelocity(), player.getFacingDirection());
+    // Window Lifecycle Cleanup
+    window.addEventListener("beforeunload", () => {
+      unbindAutoSave();
+      activeLootDrops.forEach((d) => d.dispose());
+      enemies.forEach((e) => e.dispose());
+      townHubAltar.dispose();
+      dungeonPortal.dispose();
+      visualPipelineManager.dispose();
+      saveLoadUI.dispose();
+      talentUI.dispose();
+      archetypeUI.dispose();
+      inventoryUI.dispose();
+      dungeonPortalUI.dispose();
+      mapOverlay.dispose();
+      hud.dispose();
+      juiceOverlay.dispose();
+      audioManager.dispose();
+      if (navMeshManager) navMeshManager.dispose();
+      if (tileMap) tileMap.dispose();
+      townHub.dispose();
+      inputManager.dispose();
+      player.dispose();
+      cameraRig.dispose();
+      gameEngine.dispose();
+    });
 
-    // Update 3D Spatial Audio Listener Position
-    const activeCamera = scene.activeCamera;
-    if (activeCamera) {
-      const forward = activeCamera.getForwardRay().direction;
-      audioManager.updateListener(activeCamera.position, forward);
-    }
-  });
-
-  // 14. Window Lifecycle Cleanup
-  window.addEventListener("beforeunload", () => {
-    unbindAutoSave();
-    activeLootDrops.forEach((d) => d.dispose());
-    enemies.forEach((e) => e.dispose());
-    townHubAltar.dispose();
-    visualPipelineManager.dispose();
-    saveLoadUI.dispose();
-    talentUI.dispose();
-    archetypeUI.dispose();
-    inventoryUI.dispose();
-    mapOverlay.dispose();
-    hud.dispose();
-    juiceOverlay.dispose();
-    audioManager.dispose();
-    if (navMeshManager) navMeshManager.dispose();
-    if (tileMap) tileMap.dispose();
-    townHub.dispose();
-    inputManager.dispose();
-    player.dispose();
-    cameraRig.dispose();
-    gameEngine.dispose();
-  });
-
-  // Hide loading overlay on successful initialization
-  if (overlayEl) {
-    overlayEl.style.opacity = "0";
-    setTimeout(() => {
-      overlayEl.style.display = "none";
-    }, 450);
-  }
-
-  console.log("Babylon.js Dungeon Crawler ARPG initialized successfully.");
+    console.log("Babylon.js Dungeon Crawler ARPG initialized successfully.");
   } catch (err: any) {
     showError(`Startup Error: ${err?.stack || err?.message || err}`);
   }

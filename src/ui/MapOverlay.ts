@@ -19,12 +19,15 @@ export class MapOverlay {
 
   // UI Containers
   private container: Rectangle;
+  private mainTitleText: TextBlock;
+  private seedBadgeText: TextBlock;
   private canvasElement: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
 
   // Modes: "overlay" (Diablo ARPG fullscreen overlay), "minimap" (corner)
   private isOverlayVisible: boolean = false;
   private isMinimapVisible: boolean = true;
+  private copyTimeout: any = null;
 
   constructor(scene: Scene, player: Player) {
     this.scene = scene;
@@ -46,24 +49,44 @@ export class MapOverlay {
 
     this.ctx = this.canvasElement.getContext("2d")!;
 
-    // Title banner container (Translucent backdrop so gameplay is visible through UI)
+    // Title banner container (isPointerBlocker = false so map overlay passes clicks through)
     this.container = new Rectangle("mapContainer");
     this.container.width = "100%";
     this.container.height = "100%";
-    this.container.background = "rgba(0, 0, 0, 0.0)"; // Completely transparent background
+    this.container.background = "rgba(0, 0, 0, 0.0)";
     this.container.color = "#DAA520";
     this.container.thickness = 0;
+    this.container.isPointerBlocker = false;
     this.container.isVisible = false;
     this.guiTexture.addControl(this.container);
 
-    const titleText = new TextBlock("mapTitleText", "DUNGEON MAP OVERLAY [M] / [TAB] TO TOGGLE");
-    titleText.color = "#FFD700";
-    titleText.fontSize = 14;
-    titleText.fontWeight = "bold";
-    titleText.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-    titleText.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-    titleText.top = "20px";
-    this.container.addControl(titleText);
+    // Non-interactive Main Title Text
+    this.mainTitleText = new TextBlock("mapMainTitle", "DUNGEON MAP OVERLAY [M] / [TAB] TO TOGGLE");
+    this.mainTitleText.color = "#FFD700";
+    this.mainTitleText.fontSize = 15;
+    this.mainTitleText.fontWeight = "bold";
+    this.mainTitleText.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+    this.mainTitleText.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    this.mainTitleText.top = "18px";
+    this.mainTitleText.isPointerBlocker = false;
+    this.container.addControl(this.mainTitleText);
+
+    // Interactive Seed Badge Text (ONLY this tight 240x26px element responds to clicks!)
+    this.seedBadgeText = new TextBlock("seedBadgeText", "SEED: ───");
+    this.seedBadgeText.width = "240px";
+    this.seedBadgeText.height = "26px";
+    this.seedBadgeText.color = "#F59E0B";
+    this.seedBadgeText.fontSize = 13;
+    this.seedBadgeText.fontWeight = "bold";
+    this.seedBadgeText.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+    this.seedBadgeText.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    this.seedBadgeText.top = "42px";
+    this.seedBadgeText.isPointerBlocker = true;
+    this.seedBadgeText.hoverCursor = "pointer";
+    this.seedBadgeText.onPointerUpObservable.add(() => {
+      this.copySeedToClipboard();
+    });
+    this.container.addControl(this.seedBadgeText);
 
     this.resizeCanvas();
     window.addEventListener("resize", () => this.resizeCanvas());
@@ -72,6 +95,29 @@ export class MapOverlay {
   public setGrid(grid: DungeonGrid): void {
     this.grid = grid;
     this.exploredCells.clear();
+    this.updateSeedDisplay();
+  }
+
+  private updateSeedDisplay(): void {
+    if (this.grid) {
+      this.seedBadgeText.text = `SEED: ${this.grid.seed} (Click to Copy)`;
+    } else {
+      this.seedBadgeText.text = "SEED: ───";
+    }
+  }
+
+  public copySeedToClipboard(): void {
+    if (!this.grid) return;
+    navigator.clipboard.writeText(String(this.grid.seed));
+
+    this.seedBadgeText.text = `✔ COPIED SEED (${this.grid.seed})!`;
+    this.seedBadgeText.color = "#10B981"; // Emerald Green feedback
+
+    if (this.copyTimeout) clearTimeout(this.copyTimeout);
+    this.copyTimeout = setTimeout(() => {
+      this.seedBadgeText.color = "#F59E0B";
+      this.updateSeedDisplay();
+    }, 1800);
   }
 
   private resizeCanvas(): void {
@@ -120,6 +166,8 @@ export class MapOverlay {
     this.ctx.clearRect(0, 0, W, H);
 
     if (!this.isOverlayVisible && !this.isMinimapVisible) return;
+
+    const seedText = this.grid ? `SEED: ${this.grid.seed}` : "";
 
     if (this.isOverlayVisible) {
       // ── Classic Translucent Diablo ARPG Fullscreen Overlay Mode ──
@@ -217,6 +265,12 @@ export class MapOverlay {
       this.ctx.fillRect(miniX, miniY, miniSize, miniSize);
       this.ctx.strokeRect(miniX, miniY, miniSize, miniSize);
 
+      // Render Seed below Minimap
+      this.ctx.font = "bold 11px system-ui, sans-serif";
+      this.ctx.fillStyle = "#F59E0B";
+      this.ctx.textAlign = "center";
+      this.ctx.fillText(seedText, miniX + miniSize / 2, miniY + miniSize + 16);
+
       const mapW = this.grid!.width;
       const mapH = this.grid!.height;
 
@@ -268,6 +322,7 @@ export class MapOverlay {
   }
 
   public dispose(): void {
+    if (this.copyTimeout) clearTimeout(this.copyTimeout);
     if (this.canvasElement && this.canvasElement.parentNode) {
       this.canvasElement.parentNode.removeChild(this.canvasElement);
     }
