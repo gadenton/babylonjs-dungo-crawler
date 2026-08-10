@@ -151,8 +151,8 @@ export class Enemy extends Entity {
   private setupEllipsoidCollision(): void {
     const rootMesh = this.transformNode as Mesh;
     rootMesh.checkCollisions = true;
-    rootMesh.ellipsoid = new Vector3(0.45, 0.9, 0.45);
-    rootMesh.ellipsoidOffset = new Vector3(0, 0.9, 0);
+    rootMesh.ellipsoid = new Vector3(0.25, 0.85, 0.25);
+    rootMesh.ellipsoidOffset = new Vector3(0, 0.85, 0);
   }
 
   private async loadModelAsync(url: string): Promise<void> {

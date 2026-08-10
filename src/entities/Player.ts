@@ -39,12 +39,13 @@ export class Player extends Entity {
   public readonly onArchetypeSwapped: Observable<ArchetypeDefinition> = new Observable<ArchetypeDefinition>();
   public readonly onModelLoaded: Observable<Mesh> = new Observable<Mesh>();
 
-  // Animation System State
+  // Model & Animation System State
   private animationGroups: Map<string, AnimationGroup> = new Map();
   private currentAnimName: string | null = null;
   private isAttacking: boolean = false;
   private attackTimer: number = 0;
   public modelUrl: string = "assets/characters/player/character-male-a.glb";
+  private modelScale: number = 1.4; // 1.4x default scale for main character prominence
 
   // Movement Specs
   private moveSpeed: number = 7.0; // Speed in meters/sec
@@ -77,6 +78,7 @@ export class Player extends Entity {
     if (customMesh) {
       this.mesh = customMesh;
       this.mesh.parent = this.transformNode;
+      this.mesh.scaling.set(this.modelScale, this.modelScale, this.modelScale);
     } else {
       this.mesh = new Mesh(`playerMeshContainer_${id}`, scene);
       this.mesh.parent = this.transformNode;
@@ -132,7 +134,7 @@ export class Player extends Entity {
     const loadedRoot = result.meshes[0] as Mesh;
     loadedRoot.parent = this.transformNode;
     loadedRoot.position = Vector3.Zero();
-    loadedRoot.scaling = new Vector3(1, 1, 1);
+    loadedRoot.scaling = new Vector3(this.modelScale, this.modelScale, this.modelScale);
     this.mesh = loadedRoot;
 
     // Register animation groups
@@ -195,8 +197,18 @@ export class Player extends Entity {
   public setupEllipsoidCollision(): void {
     const rootMesh = this.transformNode as Mesh;
     rootMesh.checkCollisions = true;
-    rootMesh.ellipsoid = new Vector3(0.45, 0.9, 0.45);
-    rootMesh.ellipsoidOffset = new Vector3(0, 0.9, 0);
+    const s = this.modelScale;
+    rootMesh.ellipsoid = new Vector3(0.25 * s, 0.85 * s, 0.25 * s);
+    rootMesh.ellipsoidOffset = new Vector3(0, 0.85 * s, 0);
+  }
+
+  public setModelScale(scale: number): void {
+    if (scale <= 0) return;
+    this.modelScale = scale;
+    if (this.mesh) {
+      this.mesh.scaling.set(scale, scale, scale);
+    }
+    this.setupEllipsoidCollision();
   }
 
   public setNavMeshManager(navMeshManager: NavMeshManager): void {

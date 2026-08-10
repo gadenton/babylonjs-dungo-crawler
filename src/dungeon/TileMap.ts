@@ -9,7 +9,7 @@ import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import "@babylonjs/loaders/glTF";
 import { DungeonGrid, TileType } from "./Generator";
-import { selectWallTile, selectFloorTile, selectDoorRotation } from "./Autotiler";
+import { selectWallTile, selectFloorTile, selectDoorRotation, getNeighborBitmask } from "./Autotiler";
 
 export enum DungeonTheme {
   Dungeon = "dungeon",
@@ -186,12 +186,67 @@ export class TileMap {
               }
             }
             wallCount++;
+          }
 
-            // Invisible collision box for wall
+          // Directional wall colliders aligned with visual stone wall faces
+          const { cardinalMask } = getNeighborBitmask(grid, gx, gy);
+
+          if (cardinalMask === 0) {
+            // Solid interior wall block
             const wc = CreateBox(`wc_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 2.0 }, this.scene);
             wc.position.set(worldX, 1.5, worldZ);
             wc.isVisible = false;
             wallColliders.push(wc);
+          } else if (cardinalMask === 3) {
+            // Inner corner N + E walkable -> stone corner in SW quadrant
+            const wc = CreateBox(`wc_c3_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 1.0 }, this.scene);
+            wc.position.set(worldX - 0.5, 1.5, worldZ - 0.5);
+            wc.isVisible = false;
+            wallColliders.push(wc);
+          } else if (cardinalMask === 6) {
+            // Inner corner E + S walkable -> stone corner in NW quadrant
+            const wc = CreateBox(`wc_c6_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 1.0 }, this.scene);
+            wc.position.set(worldX - 0.5, 1.5, worldZ + 0.5);
+            wc.isVisible = false;
+            wallColliders.push(wc);
+          } else if (cardinalMask === 12) {
+            // Inner corner S + W walkable -> stone corner in NE quadrant
+            const wc = CreateBox(`wc_c12_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 1.0 }, this.scene);
+            wc.position.set(worldX + 0.5, 1.5, worldZ + 0.5);
+            wc.isVisible = false;
+            wallColliders.push(wc);
+          } else if (cardinalMask === 9) {
+            // Inner corner W + N walkable -> stone corner in SE quadrant
+            const wc = CreateBox(`wc_c9_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 1.0 }, this.scene);
+            wc.position.set(worldX + 0.5, 1.5, worldZ - 0.5);
+            wc.isVisible = false;
+            wallColliders.push(wc);
+          } else {
+            // Straight wall / T-junction / end-cap directional wall colliders
+            if (cardinalMask & 1) {
+              const wcN = CreateBox(`wc_N_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 1.0 }, this.scene);
+              wcN.position.set(worldX, 1.5, worldZ - 0.5);
+              wcN.isVisible = false;
+              wallColliders.push(wcN);
+            }
+            if (cardinalMask & 2) {
+              const wcE = CreateBox(`wc_E_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 2.0 }, this.scene);
+              wcE.position.set(worldX - 0.5, 1.5, worldZ);
+              wcE.isVisible = false;
+              wallColliders.push(wcE);
+            }
+            if (cardinalMask & 4) {
+              const wcS = CreateBox(`wc_S_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 1.0 }, this.scene);
+              wcS.position.set(worldX, 1.5, worldZ + 0.5);
+              wcS.isVisible = false;
+              wallColliders.push(wcS);
+            }
+            if (cardinalMask & 8) {
+              const wcW = CreateBox(`wc_W_${gx}_${gy}`, { width: 1.0, height: 3.0, depth: 2.0 }, this.scene);
+              wcW.position.set(worldX + 0.5, 1.5, worldZ);
+              wcW.isVisible = false;
+              wallColliders.push(wcW);
+            }
           }
         }
 

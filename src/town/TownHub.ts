@@ -184,10 +184,31 @@ export class TownHub {
           }
         }
 
-        // Wall collision box for perimeter (excluding gate opening at gx=4,5 for stairs access, but wall collision covers borders)
+        // Directional perimeter wall collision boxes aligned with visual stone wall faces
         if (gy !== gridHeight - 1 || (gx !== 4 && gx !== 5)) {
-          const wc = CreateBox(`town_wc_${gx}_${gy}`, { width: 2.0, height: 3.0, depth: 2.0 }, this.scene);
-          wc.position.set(worldX, 1.5, worldZ);
+          let boxWidth = 2.0;
+          let boxDepth = 2.0;
+          let boxOffsetX = 0;
+          let boxOffsetZ = 0;
+
+          if (gx === 0) {
+            boxWidth = 1.0;
+            boxOffsetX = -0.5; // Face East into town at X = worldX
+          } else if (gx === gridWidth - 1) {
+            boxWidth = 1.0;
+            boxOffsetX = 0.5; // Face West into town at X = worldX
+          }
+
+          if (gy === 0) {
+            boxDepth = 1.0;
+            boxOffsetZ = -0.5; // Face North into town at Z = worldZ
+          } else if (gy === gridHeight - 1) {
+            boxDepth = 1.0;
+            boxOffsetZ = 0.5; // Face South into town at Z = worldZ
+          }
+
+          const wc = CreateBox(`town_wc_${gx}_${gy}`, { width: boxWidth, height: 3.0, depth: boxDepth }, this.scene);
+          wc.position.set(worldX + boxOffsetX, 1.5, worldZ + boxOffsetZ);
           wc.isVisible = false;
           wallColliders.push(wc);
         }
