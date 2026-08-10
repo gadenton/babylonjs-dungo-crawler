@@ -218,7 +218,15 @@ async function bootstrap(): Promise<void> {
         enemy.setNavMeshManager(navMeshManager);
         enemy.setTarget(player);
 
-        if (shadowGen) shadowGen.addShadowCaster(enemy.getMesh());
+        if (shadowGen) {
+          shadowGen.addShadowCaster(enemy.getMesh());
+          enemy.onModelLoaded.add((loadedMesh) => {
+            shadowGen.addShadowCaster(loadedMesh);
+            for (const child of loadedMesh.getChildMeshes()) {
+              shadowGen.addShadowCaster(child);
+            }
+          });
+        }
 
         enemy.onAttackPerformed.add(({ target, damage }) => {
           if (player.isAlive && player.health.isAlive) {

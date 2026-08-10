@@ -7,6 +7,7 @@ import { CreateCapsule } from "@babylonjs/core/Meshes/Builders/capsuleBuilder";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { Observable } from "@babylonjs/core/Misc/observable";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import "@babylonjs/loaders/glTF";
 
 import { Entity } from "./Entity";
@@ -52,6 +53,12 @@ export class Enemy extends Entity {
   private navPath: Vector3[] = [];
   private currentWaypointIdx: number = 0;
 
+  // Animation System State
+  private animationGroups: Map<string, AnimationGroup> = new Map();
+  private currentAnimName: string | null = null;
+  private isAttackingAnim: boolean = false;
+  private attackAnimTimer: number = 0;
+
   // AI & Throttling
   private pathUpdateTimer: number = 0;
   private readonly pathUpdateInterval: number = 0.3; // Throttled ~300ms path query timer
@@ -72,6 +79,7 @@ export class Enemy extends Entity {
   public readonly onStateChanged: Observable<EnemyState> = new Observable<EnemyState>();
   public readonly onAttackPerformed: Observable<{ target: Entity; damage: number }> = new Observable<{ target: Entity; damage: number }>();
   public readonly onLootDropped: Observable<{ enemy: Enemy; drops: Item[] }> = new Observable();
+  public readonly onModelLoaded: Observable<Mesh> = new Observable<Mesh>();
 
   constructor(
     id: string,
@@ -158,10 +166,62 @@ export class Enemy extends Entity {
         loadedRoot.position = Vector3.Zero();
         loadedRoot.scaling = new Vector3(1, 1, 1);
         this.mesh = loadedRoot;
+
+        this.animationGroups.clear();
+        for (const group of result.animationGroups) {
+          group.stop();
+          this.animationGroups.set(group.name.toLowerCase(), group);
+        }
+
+        this.playAnimation("idle", true);
+        this.onModelLoaded.notifyObservers(this.mesh);
       }
     } catch (err) {
-      // Keep capsule fallback if asset loading fails
       console.warn(`[Enemy] GLB model load fallback for ${cleanUrl}:`, err);
+    }
+  }
+
+  public playAnimation(name: string, loop: boolean = true, speedRatio: number = 1.0): boolean {
+    const key = name.toLowerCase();
+    const animGroup = this.animationGroups.get(key);
+    if (!animGroup) return false;
+
+    if (this.currentAnimName === key && animGroup.isPlaying) {
+      return true;
+    }
+
+    if (this.currentAnimName && this.currentAnimName !== key) {
+      const currentGroup = this.animationGroups.get(this.currentAnimName);
+      if (currentGroup) {
+        currentGroup.stop();
+      }
+    }
+
+    this.currentAnimName = key;
+    animGroup.start(loop, speedRatio, animGroup.from, animGroup.to, false);
+    return true;
+  }
+
+  public triggerAttackAnimation(): void {
+    if (!this.isAlive) return;
+    const attackAnimName = Math.random() > 0.5 ? "attack-melee-right" : "attack-melee-left";
+    const animGroup = this.animationGroups.get(attackAnimName) ?? this.animationGroups.get("attack-melee-right");
+
+    if (animGroup) {
+      if (this.currentAnimName && this.currentAnimName !== attackAnimName) {
+        const currentGroup = this.animationGroups.get(this.currentAnimName);
+        if (currentGroup) currentGroup.stop();
+      }
+
+      this.isAttackingAnim = true;
+      this.currentAnimName = attackAnimName;
+      this.attackAnimTimer = 0.5; // ~500ms duration
+
+      animGroup.start(false, 1.2, animGroup.from, animGroup.to, false);
+      animGroup.onAnimationEndObservable.addOnce(() => {
+        this.isAttackingAnim = false;
+        this.currentAnimName = null;
+      });
     }
   }
 
@@ -198,9 +258,17 @@ export class Enemy extends Entity {
     this.stats.update(deltaTime);
     this.attackTimer += deltaTime;
 
+    if (this.isAttackingAnim) {
+      this.attackAnimTimer -= deltaTime;
+      if (this.attackAnimTimer <= 0) {
+        this.isAttackingAnim = false;
+      }
+    }
+
     const target = this.targetEntity;
     if (!target || !target.isAlive) {
       this.setState(EnemyState.Idle);
+      if (!this.isAttackingAnim) this.playAnimation("idle", true);
       return;
     }
 
@@ -210,6 +278,7 @@ export class Enemy extends Entity {
     // FSM Dispatcher
     switch (this.state) {
       case EnemyState.Idle:
+        if (!this.isAttackingAnim) this.playAnimation("idle", true);
         if (distToTarget <= this.aggroRadius && hasLOS) {
           this.setState(EnemyState.Aggro);
         }
@@ -218,12 +287,14 @@ export class Enemy extends Entity {
       case EnemyState.Aggro:
         this.aggroTimer += deltaTime;
         this.facePosition(target.position, deltaTime);
+        if (!this.isAttackingAnim) this.playAnimation("idle", true);
         if (this.aggroTimer >= this.aggroDelay) {
           this.setState(EnemyState.Chase);
         }
         break;
 
       case EnemyState.Chase:
+        if (!this.isAttackingAnim) this.playAnimation("walk", true, 1.2);
         this.updateChaseState(deltaTime, target, distToTarget, hasLOS);
         break;
 
@@ -267,8 +338,11 @@ export class Enemy extends Entity {
 
     if (this.attackTimer >= this.attackCooldown) {
       this.attackTimer = 0;
+      this.triggerAttackAnimation();
       const damage = this.stats.getStat(StatType.AttackDamage);
       this.onAttackPerformed.notifyObservers({ target, damage });
+    } else if (!this.isAttackingAnim) {
+      this.playAnimation("idle", true);
     }
   }
 
@@ -366,7 +440,13 @@ export class Enemy extends Entity {
     this.setState(EnemyState.Dead);
     this.isAlive = false;
     (this.transformNode as Mesh).checkCollisions = false;
-    this.mesh.isVisible = false;
+    this.playAnimation("die", false);
+
+    setTimeout(() => {
+      if (this.mesh && !this.mesh.isDisposed()) {
+        this.mesh.isVisible = false;
+      }
+    }, 1200);
 
     const drops = rollEnemyDrops(this.enemyTier);
     if (drops.length > 0) {
