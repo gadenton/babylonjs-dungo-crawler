@@ -9,7 +9,7 @@ export enum TileType {
 export interface Room {
   id: number;
   x: number;          // Grid left
-  y: number;          // Grid top (z in 3D grid)
+  y: number;          // Grid top
   width: number;      // Grid width
   height: number;     // Grid height
   centerX: number;
@@ -34,12 +34,16 @@ export interface DungeonGrid {
 }
 
 export interface GeneratorOptions {
-  width?: number;         // Default 40
-  height?: number;        // Default 40
-  minRoomSize?: number;   // Default 4
+  width?: number;         // Explicit width (or generated if omitted)
+  height?: number;        // Explicit height (or generated if omitted)
+  minWidth?: number;      // Min dynamic width (default 55)
+  maxWidth?: number;      // Max dynamic width (default 75)
+  minHeight?: number;     // Min dynamic height (default 55)
+  maxHeight?: number;     // Max dynamic height (default 75)
+  minRoomSize?: number;   // Default 5
   maxRoomSize?: number;   // Default 10
-  maxDepth?: number;      // Default 4
-  corridorWidth?: number; // Default 2
+  maxRooms?: number;      // Default 14
+  corridorWidth?: number; // Default 1
   seed?: number;          // Optional seed (auto-generated if undefined)
 }
 
@@ -71,43 +75,35 @@ export class SeedableRNG {
   }
 }
 
-class BSPNode {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  leftChild: BSPNode | null = null;
-  rightChild: BSPNode | null = null;
-  room: Room | null = null;
-
-  constructor(x: number, y: number, width: number, height: number) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-  }
-
-  public isLeaf(): boolean {
-    return this.leftChild === null && this.rightChild === null;
-  }
-}
-
 export class Generator {
   private options: Required<GeneratorOptions>;
   private rng: SeedableRNG;
 
   constructor(options?: GeneratorOptions) {
     const seed = options?.seed ?? Math.floor(Math.random() * 0x7fffffff);
+    this.rng = new SeedableRNG(seed);
+
+    const minW = options?.minWidth ?? 55;
+    const maxW = options?.maxWidth ?? 75;
+    const minH = options?.minHeight ?? 55;
+    const maxH = options?.maxHeight ?? 75;
+
+    const width = options?.width ?? this.rng.rangeInt(minW, maxW);
+    const height = options?.height ?? this.rng.rangeInt(minH, maxH);
+
     this.options = {
-      width: options?.width ?? 40,
-      height: options?.height ?? 40,
-      minRoomSize: options?.minRoomSize ?? 4,
+      width,
+      height,
+      minWidth: minW,
+      maxWidth: maxW,
+      minHeight: minH,
+      maxHeight: maxH,
+      minRoomSize: options?.minRoomSize ?? 5,
       maxRoomSize: options?.maxRoomSize ?? 10,
-      maxDepth: options?.maxDepth ?? 4,
-      corridorWidth: options?.corridorWidth ?? 2,
+      maxRooms: options?.maxRooms ?? 14,
+      corridorWidth: options?.corridorWidth ?? 1,
       seed,
     };
-    this.rng = new SeedableRNG(this.options.seed);
   }
 
   public generate(): DungeonGrid {
@@ -128,28 +124,81 @@ export class Generator {
       cells.push(row);
     }
 
-    // 2. Build BSP Tree within bounds [1, W-2] x [1, H-2]
-    const rootNode = new BSPNode(1, 1, W - 2, H - 2);
-    this.splitNode(rootNode, 0);
-
-    // 3. Create rooms in leaf nodes
+    // 2. Place non-overlapping rooms with minimum padding (4 tiles)
     const rooms: Room[] = [];
-    this.createRoomsInLeaves(rootNode, cells, rooms);
+    const maxAttempts = this.options.maxRooms * 10;
+    const roomPadding = 4; // Ensures clear corridor distance between rooms
 
-    // Ensure we have at least 2 rooms
+    for (let attempt = 0; attempt < maxAttempts && rooms.length < this.options.maxRooms; attempt++) {
+      const rw = this.rng.rangeInt(this.options.minRoomSize, this.options.maxRoomSize);
+      const rh = this.rng.rangeInt(this.options.minRoomSize, this.options.maxRoomSize);
+      
+      const minX = 3;
+      const maxX = W - rw - 4;
+      const minY = 3;
+      const maxY = H - rh - 4;
+
+      if (maxX <= minX || maxY <= minY) continue;
+
+      const rx = this.rng.rangeInt(minX, maxX);
+      const ry = this.rng.rangeInt(minY, maxY);
+
+      // Check for overlap with padding
+      let overlaps = false;
+      for (const other of rooms) {
+        if (
+          rx - roomPadding < other.x + other.width &&
+          rx + rw + roomPadding > other.x &&
+          ry - roomPadding < other.y + other.height &&
+          ry + rh + roomPadding > other.y
+        ) {
+          overlaps = true;
+          break;
+        }
+      }
+
+      if (!overlaps) {
+        const room: Room = {
+          id: rooms.length,
+          x: rx,
+          y: ry,
+          width: rw,
+          height: rh,
+          centerX: Math.floor(rx + rw / 2),
+          centerY: Math.floor(ry + rh / 2),
+        };
+        rooms.push(room);
+        this.carveRoom(cells, room);
+      }
+    }
+
+    // Fallback: ensure at least 2 rooms if map size was heavily constrained
     if (rooms.length < 2) {
-      // Fallback: force manual rooms if BSP created too few
-      const r1: Room = { id: 0, x: 2, y: 2, width: 6, height: 6, centerX: 5, centerY: 5 };
-      const r2: Room = { id: 1, x: W - 9, y: H - 9, width: 6, height: 6, centerX: W - 6, centerY: H - 6 };
+      const r1: Room = { id: 0, x: 3, y: 3, width: 6, height: 6, centerX: 6, centerY: 6 };
+      const r2: Room = { id: 1, x: W - 10, y: H - 10, width: 6, height: 6, centerX: W - 7, centerY: H - 7 };
       rooms.push(r1, r2);
       this.carveRoom(cells, r1);
       this.carveRoom(cells, r2);
     }
 
-    // 4. Connect rooms with 2-tile wide L-corridors bottom-up
-    this.connectBSPNodes(rootNode, cells);
+    // 3. Connect rooms sequentially (0 -> 1 -> 2 -> ... -> N-1) to guarantee 100% connectivity
+    for (let i = 0; i < rooms.length - 1; i++) {
+      const rA = rooms[i];
+      const rB = rooms[i + 1];
+      this.carveLCorridor(cells, rA.centerX, rA.centerY, rB.centerX, rB.centerY);
+    }
 
-    // 5. Select Spawn and Exit Stairs
+    // Add 1 or 2 extra loop corridors for layout variety
+    const extraLoops = Math.min(2, Math.floor(rooms.length / 4));
+    for (let k = 0; k < extraLoops; k++) {
+      const idxA = this.rng.rangeInt(0, rooms.length - 1);
+      let idxB = this.rng.rangeInt(0, rooms.length - 1);
+      if (idxA !== idxB && Math.abs(idxA - idxB) > 1) {
+        this.carveLCorridor(cells, rooms[idxA].centerX, rooms[idxA].centerY, rooms[idxB].centerX, rooms[idxB].centerY);
+      }
+    }
+
+    // 4. Select Spawn and Exit Stairs
     const spawnRoom = rooms[0];
     let farthestRoom = rooms[rooms.length - 1];
     let maxDist = -1;
@@ -166,14 +215,11 @@ export class Generator {
 
     cells[stairsPosition.y][stairsPosition.x].type = TileType.Stairs;
 
-    // 6. Door placement at room-corridor transitions
-    this.placeDoors(cells);
-
-    // 7. BFS Flood Fill validation and reachability repair
-    this.ensureReachability(cells, rooms, spawnPosition, stairsPosition);
-
-    // 8. Place wall boundaries around floor cells
+    // 5. Place walls BEFORE doors so placeDoors knows exact wall topology
     this.placeWalls(cells);
+
+    // 6. Door placement at room-corridor transitions framed strictly between two solid walls
+    this.placeDoors(cells);
 
     return {
       width: W,
@@ -184,76 +230,6 @@ export class Generator {
       stairsPosition,
       seed: this.options.seed,
     };
-  }
-
-  private splitNode(node: BSPNode, depth: number): void {
-    if (depth >= this.options.maxDepth) return;
-
-    const minSize = this.options.minRoomSize + 2;
-    const canSplitVertically = node.width >= minSize * 2;
-    const canSplitHorizontally = node.height >= minSize * 2;
-
-    if (!canSplitVertically && !canSplitHorizontally) return;
-
-    let splitVertical = false;
-    if (canSplitVertically && canSplitHorizontally) {
-      if (node.width / node.height > 1.25) {
-        splitVertical = true;
-      } else if (node.height / node.width > 1.25) {
-        splitVertical = false;
-      } else {
-        splitVertical = this.rng.random() < 0.5;
-      }
-    } else {
-      splitVertical = canSplitVertically;
-    }
-
-    if (splitVertical) {
-      const splitX = this.rng.rangeInt(minSize, node.width - minSize);
-      node.leftChild = new BSPNode(node.x, node.y, splitX, node.height);
-      node.rightChild = new BSPNode(node.x + splitX, node.y, node.width - splitX, node.height);
-    } else {
-      const splitY = this.rng.rangeInt(minSize, node.height - minSize);
-      node.leftChild = new BSPNode(node.x, node.y, node.width, splitY);
-      node.rightChild = new BSPNode(node.x, node.y + splitY, node.width, node.height - splitY);
-    }
-
-    this.splitNode(node.leftChild, depth + 1);
-    this.splitNode(node.rightChild, depth + 1);
-  }
-
-  private createRoomsInLeaves(node: BSPNode, cells: CellMetadata[][], rooms: Room[]): void {
-    if (node.isLeaf()) {
-      const minW = Math.max(this.options.minRoomSize, 4);
-      const maxW = Math.min(this.options.maxRoomSize, node.width - 2);
-      const minH = Math.max(this.options.minRoomSize, 4);
-      const maxH = Math.min(this.options.maxRoomSize, node.height - 2);
-
-      if (maxW < minW || maxH < minH) return;
-
-      const roomW = this.rng.rangeInt(minW, maxW);
-      const roomH = this.rng.rangeInt(minH, maxH);
-      const roomX = node.x + this.rng.rangeInt(1, Math.max(1, node.width - roomW - 1));
-      const roomY = node.y + this.rng.rangeInt(1, Math.max(1, node.height - roomH - 1));
-
-      const room: Room = {
-        id: rooms.length,
-        x: roomX,
-        y: roomY,
-        width: roomW,
-        height: roomH,
-        centerX: Math.floor(roomX + roomW / 2),
-        centerY: Math.floor(roomY + roomH / 2),
-      };
-
-      node.room = room;
-      rooms.push(room);
-
-      this.carveRoom(cells, room);
-    } else {
-      if (node.leftChild) this.createRoomsInLeaves(node.leftChild, cells, rooms);
-      if (node.rightChild) this.createRoomsInLeaves(node.rightChild, cells, rooms);
-    }
   }
 
   private carveRoom(cells: CellMetadata[][], room: Room): void {
@@ -267,41 +243,11 @@ export class Generator {
     }
   }
 
-  private getRoomCenterFromSubtree(node: BSPNode): { x: number; y: number } | null {
-    if (node.room) return { x: node.room.centerX, y: node.room.centerY };
-    if (node.leftChild) {
-      const res = this.getRoomCenterFromSubtree(node.leftChild);
-      if (res) return res;
-    }
-    if (node.rightChild) {
-      const res = this.getRoomCenterFromSubtree(node.rightChild);
-      if (res) return res;
-    }
-    return null;
-  }
-
-  private connectBSPNodes(node: BSPNode, cells: CellMetadata[][]): void {
-    if (node.isLeaf()) return;
-
-    if (node.leftChild && node.rightChild) {
-      this.connectBSPNodes(node.leftChild, cells);
-      this.connectBSPNodes(node.rightChild, cells);
-
-      const c1 = this.getRoomCenterFromSubtree(node.leftChild);
-      const c2 = this.getRoomCenterFromSubtree(node.rightChild);
-
-      if (c1 && c2) {
-        this.carveLCorridor(cells, c1.x, c1.y, c2.x, c2.y);
-      }
-    }
-  }
-
   private carveLCorridor(cells: CellMetadata[][], x1: number, y1: number, x2: number, y2: number): void {
     const W = this.options.width;
     const H = this.options.height;
-    const cWidth = this.options.corridorWidth; // 2 tiles wide
+    const cWidth = this.options.corridorWidth;
 
-    // Random choice: horizontal first or vertical first
     const hFirst = this.rng.random() < 0.5;
 
     if (hFirst) {
@@ -367,87 +313,6 @@ export class Generator {
     }
   }
 
-  private placeDoors(cells: CellMetadata[][]): void {
-    const W = this.options.width;
-    const H = this.options.height;
-
-    for (let y = 1; y < H - 1; y++) {
-      for (let x = 1; x < W - 1; x++) {
-        const cell = cells[y][x];
-        if (cell.type === TileType.Floor && cell.isCorridor && cell.roomId === null) {
-          // Check if adjacent to a room cell
-          const northRoom = cells[y - 1][x].roomId !== null;
-          const southRoom = cells[y + 1][x].roomId !== null;
-          const eastRoom = cells[y][x + 1].roomId !== null;
-          const westRoom = cells[y][x - 1].roomId !== null;
-
-          if ((northRoom || southRoom) !== (eastRoom || westRoom)) {
-            // Check wall boundaries on sides
-            cell.type = TileType.Door;
-          }
-        }
-      }
-    }
-  }
-
-  private ensureReachability(
-    cells: CellMetadata[][],
-    rooms: Room[],
-    spawnPos: { x: number; y: number },
-    stairsPos: { x: number; y: number }
-  ): void {
-    const W = this.options.width;
-    const H = this.options.height;
-
-    const isVisited = (start: { x: number; y: number }): Set<string> => {
-      const visited = new Set<string>();
-      const queue: { x: number; y: number }[] = [start];
-      visited.add(`${start.x},${start.y}`);
-
-      const dirs = [
-        { x: 0, y: 1 },
-        { x: 0, y: -1 },
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
-      ];
-
-      while (queue.length > 0) {
-        const curr = queue.shift()!;
-        for (const d of dirs) {
-          const nx = curr.x + d.x;
-          const ny = curr.y + d.y;
-          if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
-            const type = cells[ny][nx].type;
-            if (type === TileType.Floor || type === TileType.Door || type === TileType.Stairs) {
-              const key = `${nx},${ny}`;
-              if (!visited.has(key)) {
-                visited.add(key);
-                queue.push({ x: nx, y: ny });
-              }
-            }
-          }
-        }
-      }
-      return visited;
-    };
-
-    let visited = isVisited(spawnPos);
-
-    // Verify stairs reachable
-    if (!visited.has(`${stairsPos.x},${stairsPos.y}`)) {
-      this.carveLCorridor(cells, spawnPos.x, spawnPos.y, stairsPos.x, stairsPos.y);
-      visited = isVisited(spawnPos);
-    }
-
-    // Verify all room centers reachable
-    for (const room of rooms) {
-      if (!visited.has(`${room.centerX},${room.centerY}`)) {
-        this.carveLCorridor(cells, spawnPos.x, spawnPos.y, room.centerX, room.centerY);
-        visited = isVisited(spawnPos);
-      }
-    }
-  }
-
   private placeWalls(cells: CellMetadata[][]): void {
     const W = this.options.width;
     const H = this.options.height;
@@ -455,7 +320,6 @@ export class Generator {
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         if (cells[y][x].type === TileType.Empty) {
-          // Check if adjacent to floor/door/stairs
           let isAdjacentToFloor = false;
           let floorDirX = 0;
           let floorDirY = 0;
@@ -473,10 +337,8 @@ export class Generator {
                   neighborType === TileType.Stairs
                 ) {
                   isAdjacentToFloor = true;
-                  if (dx !== 0 || dy !== 0) {
-                    floorDirX += dx;
-                    floorDirY += dy;
-                  }
+                  floorDirX += dx;
+                  floorDirY += dy;
                 }
               }
             }
@@ -485,19 +347,74 @@ export class Generator {
           if (isAdjacentToFloor) {
             cells[y][x].type = TileType.Wall;
 
-            // Determine rotation based on primary floor direction relative to wall
-            // Wall faces towards the floor interior
             let rotation = 0;
             if (floorDirY < 0) {
-              rotation = Math.PI; // Floor to South (-Y in grid)
+              rotation = Math.PI;
             } else if (floorDirY > 0) {
-              rotation = 0; // Floor to North (+Y in grid)
+              rotation = 0;
             } else if (floorDirX > 0) {
-              rotation = (3 * Math.PI) / 2; // Floor to East (+X in grid)
+              rotation = (3 * Math.PI) / 2;
             } else if (floorDirX < 0) {
-              rotation = Math.PI / 2; // Floor to West (-X in grid)
+              rotation = Math.PI / 2;
             }
             cells[y][x].wallRotation = rotation;
+          }
+        }
+      }
+    }
+  }
+
+  private placeDoors(cells: CellMetadata[][]): void {
+    const W = this.options.width;
+    const H = this.options.height;
+
+    for (let y = 2; y < H - 2; y++) {
+      for (let x = 2; x < W - 2; x++) {
+        const cell = cells[y][x];
+        // Only corridor floor tiles with no roomId
+        if (cell.type !== TileType.Floor || !cell.isCorridor || cell.roomId !== null) {
+          continue;
+        }
+
+        const nIsRoom = cells[y - 1][x].roomId !== null;
+        const sIsRoom = cells[y + 1][x].roomId !== null;
+        const eIsRoom = cells[y][x + 1].roomId !== null;
+        const wIsRoom = cells[y][x - 1].roomId !== null;
+
+        // N-S entrance: North is Room & South is Corridor (or vice-versa), AND BOTH East and West are Walls!
+        const isNSDoorway =
+          ((nIsRoom && !sIsRoom) || (sIsRoom && !nIsRoom)) &&
+          !eIsRoom && !wIsRoom &&
+          cells[y][x + 1].type === TileType.Wall &&
+          cells[y][x - 1].type === TileType.Wall;
+
+        // E-W entrance: East is Room & West is Corridor (or vice-versa), AND BOTH North and South are Walls!
+        const isEWDoorway =
+          ((eIsRoom && !wIsRoom) || (wIsRoom && !eIsRoom)) &&
+          !nIsRoom && !sIsRoom &&
+          cells[y - 1][x].type === TileType.Wall &&
+          cells[y + 1][x].type === TileType.Wall;
+
+        if (isNSDoorway || isEWDoorway) {
+          // Ensure no adjacent door within a 2-tile radius
+          let hasNearbyDoor = false;
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const ny = y + dy;
+              const nx = x + dx;
+              if (ny >= 0 && ny < H && nx >= 0 && nx < W) {
+                if (cells[ny][nx].type === TileType.Door) {
+                  hasNearbyDoor = true;
+                  break;
+                }
+              }
+            }
+            if (hasNearbyDoor) break;
+          }
+
+          if (!hasNearbyDoor) {
+            cell.type = TileType.Door;
           }
         }
       }

@@ -62,6 +62,7 @@ export class TileMap {
       "template-corner.glb",
       "template-wall-half.glb",
       "template-wall-detail-a.glb",
+      "gate.glb",
       "gate-door.glb",
       "stairs.glb",
     ];
@@ -192,9 +193,9 @@ export class TileMap {
           wallColliders.push(wc);
         }
 
-        // ── Door overlay ──
+        // ── Door overlay (Use clean open gate.glb) ──
         if (cell.type === TileType.Door) {
-          const doorSources = this.templateMeshes.get("gate-door.glb") || [];
+          const doorSources = this.templateMeshes.get("gate.glb") || this.templateMeshes.get("gate-door.glb") || [];
           if (doorSources.length > 0) {
             const doorRotation = selectDoorRotation(grid, gx, gy);
             for (const src of doorSources) {
@@ -288,4 +289,3 @@ export class TileMap {
     this.isLoaded = false;
   }
 }
-
