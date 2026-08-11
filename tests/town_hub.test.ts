@@ -16,10 +16,10 @@ describe("Town Hub Plaza Environment Build", () => {
     const builtTown = await townHub.build();
 
     expect(builtTown.rootNode.name).toBe("townHubRoot");
-    expect(builtTown.spawnPoint.x).toBe(10);
-    expect(builtTown.spawnPoint.z).toBe(6);
-    expect(builtTown.altarPosition.x).toBe(10);
-    expect(builtTown.altarPosition.z).toBe(16);
+    expect(builtTown.spawnPoint.x).toBe(20);
+    expect(builtTown.spawnPoint.z).toBe(15);
+    expect(builtTown.altarPosition.x).toBe(20);
+    expect(builtTown.altarPosition.z).toBe(29);
 
     expect(builtTown.mergedFloors).not.toBeNull();
     expect(builtTown.mergedWalls).not.toBeNull();

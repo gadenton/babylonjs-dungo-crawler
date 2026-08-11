@@ -29,20 +29,20 @@ export class TownHubAltar {
     // Base Altar Mesh: stylized stone altar cylinder
     this.mesh = CreateCylinder("townHubAltar", { height: 1.6, diameterTop: 2.2, diameterBottom: 2.6, tessellation: 32 }, scene);
     this.mesh.position = this.position.clone();
-    this.mesh.position.y = 0.8;
+    this.mesh.position.y = this.position.y + 0.8;
     this.mesh.checkCollisions = true;
     this.mesh.isPickable = true;
 
     this.altarMat = new StandardMaterial("altarMat", scene);
-    this.altarMat.diffuseColor = new Color3(0.2, 0.25, 0.35);
-    this.altarMat.emissiveColor = new Color3(0.05, 0.1, 0.2);
+    this.altarMat.diffuseColor = new Color3(0.15, 0.22, 0.35);
+    this.altarMat.emissiveColor = new Color3(0.08, 0.15, 0.3);
     this.altarMat.specularPower = 32;
     this.mesh.material = this.altarMat;
 
     // Outer Runed Glow Ring
-    this.ringMesh = CreateTorus("altarGlowRing", { diameter: 3.2, thickness: 0.15, tessellation: 32 }, scene);
+    this.ringMesh = CreateTorus("altarGlowRing", { diameter: 3.4, thickness: 0.15, tessellation: 32 }, scene);
     this.ringMesh.position = this.position.clone();
-    this.ringMesh.position.y = 0.05;
+    this.ringMesh.position.y = this.position.y + 0.05;
     this.ringMesh.isPickable = true;
 
     this.ringMat = new StandardMaterial("ringMat", scene);
@@ -50,16 +50,31 @@ export class TownHubAltar {
     this.ringMat.disableLighting = true;
     this.ringMesh.material = this.ringMat;
 
-    // Center Altar Light
-    this.light = new PointLight("altarGlowLight", this.position.add(new Vector3(0, 2.2, 0)), scene);
-    this.light.diffuse = new Color3(0.2, 0.7, 1.0);
-    this.light.specular = new Color3(0.5, 0.9, 1.0);
-    this.light.intensity = 2.0;
+    // Floating Arcane Crystal Piece atop Altar
+    const crystalMesh = CreateCylinder("altarCrystal", { height: 1.0, diameterTop: 0, diameterBottom: 0.8, tessellation: 6 }, scene);
+    crystalMesh.position = this.position.add(new Vector3(0, 1.9, 0));
+    crystalMesh.parent = this.mesh;
+    const crystalMat = new StandardMaterial("crystalMat", scene);
+    crystalMat.emissiveColor = new Color3(0.3, 0.8, 1.0);
+    crystalMat.alpha = 0.9;
+    crystalMesh.material = crystalMat;
 
-    // Slow rotation animation for altar glow ring
+    // Center Altar Light
+    this.light = new PointLight("altarGlowLight", this.position.add(new Vector3(0, 2.4, 0)), scene);
+    this.light.diffuse = new Color3(0.2, 0.75, 1.0);
+    this.light.specular = new Color3(0.5, 0.9, 1.0);
+    this.light.intensity = 2.8;
+
+    // Rotation & Levitating pulse animation for altar glow ring & crystal
+    let animTime = 0;
     this.renderObserver = scene.onBeforeRenderObservable.add(() => {
+      animTime += 0.016;
       if (this.ringMesh && !this.ringMesh.isDisposed()) {
         this.ringMesh.rotation.y += 0.01;
+      }
+      if (crystalMesh && !crystalMesh.isDisposed()) {
+        crystalMesh.rotation.y -= 0.02;
+        crystalMesh.position.y = 1.9 + Math.sin(animTime * 2.5) * 0.15;
       }
     });
   }

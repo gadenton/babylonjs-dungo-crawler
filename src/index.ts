@@ -83,8 +83,8 @@ async function bootstrap(): Promise<void> {
     console.timeEnd("[Index] TownHub build");
     const townHubAltar = builtTown.altar;
 
-    // Spawn Dungeon Portal in Town Hub Plaza (near altar)
-    const dungeonPortal = new DungeonPortal("dungeonPortal", scene, new Vector3(4.5, 0, 4.5));
+    // Spawn Dungeon Portal in Town Hub East Portal Alcove
+    const dungeonPortal = new DungeonPortal("dungeonPortal", scene, builtTown.portalPosition);
 
     // 5. Position Player & State Tracking
     setStatus("5/8 Spawning Player in Town Hub...");

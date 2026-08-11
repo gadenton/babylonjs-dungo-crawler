@@ -3,6 +3,7 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+import { CreateTorus } from "@babylonjs/core/Meshes/Builders/torusBuilder";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -16,6 +17,7 @@ export class DungeonPortal {
   public scene: Scene;
   public transformNode: TransformNode;
   public portalCore: Mesh;
+  public ringMesh: Mesh;
   public pointLight: PointLight;
   public position: Vector3;
 
@@ -30,27 +32,38 @@ export class DungeonPortal {
 
     this.transformNode = new TransformNode(`portalRoot_${id}`, this.scene);
     this.transformNode.position = this.position;
+    // Orient portal facing West towards central courtyard
+    this.transformNode.rotation.y = -Math.PI / 2;
 
     // Glowing Magic Swirling Portal Core Plane inside Archway
-    this.portalCore = CreatePlane(`portalCore_${id}`, { width: 2.2, height: 4.0 }, this.scene);
-    this.portalCore.position.set(0, 2.2, 0);
+    this.portalCore = CreatePlane(`portalCore_${id}`, { width: 2.2, height: 3.6 }, this.scene);
+    this.portalCore.position.set(0, 1.8, 0);
     this.portalCore.parent = this.transformNode;
 
     const coreMat = new StandardMaterial(`portalCoreMat_${id}`, this.scene);
-    coreMat.diffuseColor = new Color3(0.1, 0.4, 1.0);
-    coreMat.emissiveColor = new Color3(0.2, 0.6, 1.0); // Glowing Cyan/Blue
+    coreMat.diffuseColor = new Color3(0.05, 0.4, 0.9);
+    coreMat.emissiveColor = new Color3(0.2, 0.7, 1.0); // Glowing Cyan/Blue
     coreMat.alpha = 0.85;
     coreMat.backFaceCulling = false;
     this.portalCore.material = coreMat;
 
+    // Runed Outer Ground Ring
+    this.ringMesh = CreateTorus(`portalRing_${id}`, { diameter: 3.4, thickness: 0.12, tessellation: 32 }, this.scene);
+    this.ringMesh.position.set(0, 0.05, 0);
+    this.ringMesh.parent = this.transformNode;
+    const ringMat = new StandardMaterial(`portalRingMat_${id}`, this.scene);
+    ringMat.emissiveColor = new Color3(0.1, 0.8, 1.0);
+    ringMat.disableLighting = true;
+    this.ringMesh.material = ringMat;
+
     // Magical PointLight
-    this.pointLight = new PointLight(`portalLight_${id}`, new Vector3(0, 2.2, 0), this.scene);
-    this.pointLight.diffuse = new Color3(0.2, 0.7, 1.0);
-    this.pointLight.intensity = 3.0;
-    this.pointLight.range = 10.0;
+    this.pointLight = new PointLight(`portalLight_${id}`, new Vector3(0, 2.0, 0), this.scene);
+    this.pointLight.diffuse = new Color3(0.2, 0.75, 1.0);
+    this.pointLight.intensity = 3.2;
+    this.pointLight.range = 11.0;
     this.pointLight.parent = this.transformNode;
 
-    // Load distinct Portal Tower Archway model from props
+    // Load distinct Portal Archway model from props
     this.loadPortalMesh();
   }
 
@@ -100,14 +113,19 @@ export class DungeonPortal {
     this.animTime += deltaTime;
     if (this.portalCore && this.portalCore.material) {
       const mat = this.portalCore.material as StandardMaterial;
-      const pulse = 0.6 + Math.sin(this.animTime * 3.5) * 0.3;
-      mat.emissiveColor = new Color3(0.1 * pulse, 0.5 * pulse, 1.0 * pulse);
-      this.pointLight.intensity = 2.5 + Math.sin(this.animTime * 4.0) * 1.0;
+      const pulse = 0.7 + Math.sin(this.animTime * 3.5) * 0.3;
+      mat.emissiveColor = new Color3(0.1 * pulse, 0.6 * pulse, 1.0 * pulse);
+      this.pointLight.intensity = 2.8 + Math.sin(this.animTime * 4.0) * 1.0;
+    }
+    if (this.ringMesh && !this.ringMesh.isDisposed()) {
+      this.ringMesh.rotation.y += deltaTime * 0.8;
     }
   }
 
   public dispose(): void {
     this.pointLight.dispose();
+    if (this.ringMesh) this.ringMesh.dispose();
     this.transformNode.dispose();
   }
 }
+
