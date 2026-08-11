@@ -86,24 +86,28 @@ async function bootstrap(): Promise<void> {
     // Spawn Dungeon Portal in Town Hub Plaza (near altar)
     const dungeonPortal = new DungeonPortal("dungeonPortal", scene, new Vector3(4.5, 0, 4.5));
 
-    // 5. Position Player & Attach Camera in Town Hub
+    // 5. Position Player & State Tracking
     setStatus("5/8 Spawning Player in Town Hub...");
     player.transformNode.position = builtTown.spawnPoint.clone();
 
-    // Zero enemies in Town Hub
+    let inDungeon = false;
+    let tileMap: TileMap | null = null;
+    let navMeshManager: NavMeshManager | null = null;
     const enemies: Enemy[] = [];
+    const activeLootDrops: LootDrop[] = [];
+
+    const getCurrentZone = () => (inDungeon ? ("dungeon" as const) : ("town_hub" as const));
+    const getDungeonFloor = () => 1;
 
     // 6. Wire UI Overlays
     setStatus("6/8 Wiring UI & Launching Render Loop...");
     const talentUI = new TalentUI(scene, player.talentTree, inputManager);
     const archetypeUI = new ArchetypeUI(scene, player, inputManager, audioManager);
     const inventoryUI = new InventoryUI(scene, player, inputManager);
-    const saveLoadUI = new SaveLoadUI(scene, player, inputManager);
+    const saveLoadUI = new SaveLoadUI(scene, player, inputManager, getCurrentZone, getDungeonFloor);
     const hud = new HUD(scene, player, inputManager);
     const mapOverlay = new MapOverlay(scene, player);
     const dungeonPortalUI = new DungeonPortalUI(scene);
-
-    const activeLootDrops: LootDrop[] = [];
 
     // Wire UI Toggle Handlers
     hud.setOnMapButtonClick(() => mapOverlay.toggleOverlay());
@@ -117,8 +121,39 @@ async function bootstrap(): Promise<void> {
       hud.showPickupNotification(msg, "#87CEFA");
     });
 
+    const returnToTownHub = () => {
+      enemies.forEach((e) => e.dispose());
+      enemies.length = 0;
+
+      activeLootDrops.forEach((d) => d.dispose());
+      activeLootDrops.length = 0;
+
+      if (navMeshManager) {
+        navMeshManager.dispose();
+        navMeshManager = null;
+      }
+      player.setNavMeshManager(null);
+
+      if (tileMap) {
+        tileMap.clearDungeon();
+        tileMap.dispose();
+        tileMap = null;
+      }
+
+      mapOverlay.setGrid(null as any);
+      mapOverlay.setOverlayVisible(false);
+      inDungeon = false;
+
+      player.transformNode.position = builtTown.spawnPoint.clone();
+      hud.showPickupNotification("Returned to Town Hub", "#10B981");
+    };
+
+    saveLoadUI.onLoadExecuted.add(() => {
+      returnToTownHub();
+    });
+
     // Wire Auto-Save Listeners
-    const unbindAutoSave = SaveManager.registerAutoSaveEvents(player);
+    const unbindAutoSave = SaveManager.registerAutoSaveEvents(player, getCurrentZone, getDungeonFloor);
 
     // Keyboard shortcut listeners for UI overlays & interactions
     window.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -173,10 +208,6 @@ async function bootstrap(): Promise<void> {
     }
 
     // Dynamic Dungeon Entry Transition Handler
-    let inDungeon = false;
-    let tileMap: TileMap | null = null;
-    let navMeshManager: NavMeshManager | null = null;
-
     const transitionToDungeon = async (customSeed?: number) => {
       if (inDungeon) return;
       inDungeon = true;

@@ -194,11 +194,8 @@ export class SaveManager {
     player.health.setCurrentHp(saveState.player.currentHp);
     player.stats.setMana(saveState.player.currentMana);
 
-    // 7. Restore Position
-    if (saveState.player.position) {
-      const pos = saveState.player.position;
-      player.transformNode.position = new Vector3(pos.x, pos.y, pos.z);
-    }
+    // 7. Reset Position to Town Hub Spawn (Loading always returns player to Town Hub)
+    player.transformNode.position = new Vector3(10.0, 0.0, 6.0);
 
     // 8. Trigger Zone Load if callback provided
     if (onZoneLoadRequested && saveState.world) {

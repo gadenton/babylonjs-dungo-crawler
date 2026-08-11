@@ -38,6 +38,8 @@ export class TileMap {
   private templateMeshes: Map<string, Mesh[]> = new Map();
   /** Root nodes from GLB imports (for disposal) */
   private templateRoots: TransformNode[] = [];
+  /** Root node of the currently active generated dungeon instance */
+  private currentDungeonRoot: TransformNode | null = null;
   private isLoaded: boolean = false;
 
   constructor(scene: Scene, theme: DungeonTheme = DungeonTheme.Dungeon) {
@@ -123,8 +125,11 @@ export class TileMap {
       await this.preloadAssets();
     }
 
+    this.clearDungeon();
+
     console.log("[TileMap] Starting buildFromGrid with Kenney GLB instances...");
     const rootNode = new TransformNode("dungeonRoot", this.scene);
+    this.currentDungeonRoot = rootNode;
 
     // Track all instances for parenting
     const allInstances: InstancedMesh[] = [];
@@ -383,7 +388,15 @@ export class TileMap {
     };
   }
 
+  public clearDungeon(): void {
+    if (this.currentDungeonRoot) {
+      this.currentDungeonRoot.dispose(false, true);
+      this.currentDungeonRoot = null;
+    }
+  }
+
   public dispose(): void {
+    this.clearDungeon();
     for (const root of this.templateRoots) {
       root.dispose(false, true);
     }

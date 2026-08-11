@@ -1,6 +1,7 @@
 import { runDungeonGenTest } from "./dungeon_gen.test";
 import { runPlayerModelTest } from "./player_model.test";
 import { runTownHubTest } from "./town_hub.test";
+import { runSaveLoadTransitionTest } from "./save_load_transition.test";
 
 async function main() {
   console.log("===============================================");
@@ -11,6 +12,7 @@ async function main() {
     await runDungeonGenTest(),
     await runPlayerModelTest(),
     await runTownHubTest(),
+    await runSaveLoadTransitionTest(),
   ];
 
   const allPassed = results.every(res => res === true);

@@ -209,7 +209,7 @@ export class Player extends Entity {
     this.setupEllipsoidCollision();
   }
 
-  public setNavMeshManager(navMeshManager: NavMeshManager): void {
+  public setNavMeshManager(navMeshManager: NavMeshManager | null): void {
     this.navMeshManager = navMeshManager;
   }
 

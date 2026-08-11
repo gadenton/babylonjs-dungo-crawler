@@ -33,10 +33,21 @@ export class SaveLoadUI {
   public onNotification: Observable<string> = new Observable<string>();
   public onLoadExecuted: Observable<string> = new Observable<string>();
 
-  constructor(scene: Scene, player: Player, inputManager?: InputManager) {
+  private getCurrentZone: () => "town_hub" | "dungeon";
+  private getDungeonFloor: () => number;
+
+  constructor(
+    scene: Scene,
+    player: Player,
+    inputManager?: InputManager,
+    getCurrentZone: () => "town_hub" | "dungeon" = () => "town_hub",
+    getDungeonFloor: () => number = () => 1
+  ) {
     this.scene = scene;
     this.player = player;
     this.inputManager = inputManager ?? null;
+    this.getCurrentZone = getCurrentZone;
+    this.getDungeonFloor = getDungeonFloor;
 
     this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI("SaveLoadUIOverlay", true, this.scene);
 
@@ -290,7 +301,7 @@ export class SaveLoadUI {
   }
 
   private handleSave(slotId: string): void {
-    const success = SaveManager.save(slotId, this.player);
+    const success = SaveManager.save(slotId, this.player, this.getCurrentZone(), this.getDungeonFloor());
     if (success) {
       const msg = `Game successfully saved to ${slotId.toUpperCase()}!`;
       console.log(`[SaveLoadUI] ${msg}`);
