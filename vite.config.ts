@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  base: "./",
   optimizeDeps: {
     exclude: ["recast-navigation"],
   },
@@ -10,3 +11,4 @@ export default defineConfig({
     host: true,
   },
 });
+

@@ -56,7 +56,7 @@ export class DungeonPortal {
 
   private async loadPortalMesh(): Promise<void> {
     try {
-      const result = await SceneLoader.ImportMeshAsync("", "/assets/props/", "dungeon-portal.glb", this.scene);
+      const result = await SceneLoader.ImportMeshAsync("", "assets/props/", "dungeon-portal.glb", this.scene);
       if (result && result.meshes.length > 0) {
         const root = result.meshes[0];
         root.parent = this.transformNode;

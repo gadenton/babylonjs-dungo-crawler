@@ -48,7 +48,7 @@ export class TownHub {
       "stairs-wide.glb",
     ];
 
-    const basePath = "/assets/dungeon/";
+    const basePath = "assets/dungeon/";
 
     for (const model of models) {
       try {

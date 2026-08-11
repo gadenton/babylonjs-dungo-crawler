@@ -67,7 +67,7 @@ export class TileMap {
       "stairs.glb",
     ];
 
-    const basePath = `/assets/${this.theme}/`;
+    const basePath = `assets/${this.theme}/`;
 
     for (const model of models) {
       try {
