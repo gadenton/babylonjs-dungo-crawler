@@ -100,12 +100,12 @@ export class NavMeshManager {
       { x: start.x, y: start.y, z: start.z },
       { x: end.x, y: end.y, z: end.z },
       {
-        halfExtents: { x: 2.0, y: 5.0, z: 2.0 },
+        halfExtents: { x: 4.0, y: 5.0, z: 4.0 },
       }
     );
 
     if (!result.success || !result.path || result.path.length === 0) {
-      return [];
+      return [end.clone()];
     }
 
     return result.path.map((pt) => new Vector3(pt.x, pt.y, pt.z));

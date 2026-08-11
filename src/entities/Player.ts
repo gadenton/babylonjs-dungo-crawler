@@ -410,6 +410,8 @@ export class Player extends Entity {
     this.currentVelocity = Vector3.Lerp(this.currentVelocity, targetVelocity, lerpFactor);
 
     const displacement = this.currentVelocity.scale(deltaTime);
+    // Apply gravity vector for smooth ground clamping and slope tracking via moveWithCollisions
+    displacement.y = -9.81 * deltaTime;
     if (displacement.lengthSquared() > 0.00001) {
       (this.transformNode as Mesh).moveWithCollisions(displacement);
     }

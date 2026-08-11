@@ -215,8 +215,8 @@ export class TownHub {
         instantiate(sources, pos, 0, `town_floor_${gx}_${gy}`);
 
         // Floor Pickable Collider
-        const fc = CreateBox(`town_fc_${gx}_${gy}`, { width: 2.0, height: 0.2, depth: 2.0 }, this.scene);
-        fc.position.set(worldX, elevation - 0.1, worldZ);
+        const fc = CreateBox(`town_fc_${gx}_${gy}`, { width: 2.0, height: 0.1, depth: 2.0 }, this.scene);
+        fc.position.set(worldX, elevation - 0.05, worldZ);
         fc.isVisible = false;
         floorColliders.push(fc);
 

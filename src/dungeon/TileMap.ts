@@ -167,9 +167,9 @@ export class TileMap {
           }
           floorCount++;
 
-          // Invisible collision box for floor (pickable for click-to-move)
-          const fc = CreateBox(`fc_${gx}_${gy}`, { width: 2.0, height: 0.2, depth: 2.0 }, this.scene);
-          fc.position.set(worldX, -0.1, worldZ);
+          // Invisible collision box for floor (pickable for click-to-move and clean Recast NavMesh generation)
+          const fc = CreateBox(`fc_${gx}_${gy}`, { width: 2.0, height: 0.1, depth: 2.0 }, this.scene);
+          fc.position.set(worldX, -0.05, worldZ);
           fc.isVisible = false;
           floorColliders.push(fc);
         }
