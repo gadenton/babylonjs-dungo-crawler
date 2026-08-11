@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
@@ -5,73 +6,45 @@ import "@babylonjs/loaders/glTF";
 import fs from "fs";
 import { polyfillXHR } from "./xhr_polyfill";
 
-export async function runPlayerModelTest(): Promise<boolean> {
-  console.log("\n=== [TEST] Player Kenney Asset GLB Model & Animations ===");
-  polyfillXHR();
+describe("Player Kenney Asset GLB Model & Animations", () => {
+  it("should load player GLB model and contain critical animations", async () => {
+    polyfillXHR();
 
-  const engine = new NullEngine();
-  const scene = new Scene(engine);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
 
-  const modelPath = "public/assets/characters/player/character-male-a.glb";
-  if (!fs.existsSync(modelPath)) {
-    console.error(`❌ FAIL: Player GLB asset file not found: ${modelPath}`);
-    engine.dispose();
-    return false;
-  }
+    const modelPath = "public/assets/characters/player/character-male-a.glb";
+    expect(fs.existsSync(modelPath)).toBe(true);
 
-  try {
     const fileBuffer = fs.readFileSync(modelPath);
     const dataUri = "data:;base64," + fileBuffer.toString("base64");
 
     const result = await SceneLoader.ImportMeshAsync("", "", dataUri, scene, null, ".glb");
+    expect(result.meshes.length).toBeGreaterThan(0);
+    expect(result.animationGroups.length).toBeGreaterThan(0);
 
-    console.log(`Loaded player GLB: ${result.meshes.length} root meshes, ${result.animationGroups.length} animation groups.`);
-
-    const animNames = result.animationGroups.map(ag => ag.name);
-    console.log("Available Animation Groups:", animNames.join(", "));
+    const animNames = result.animationGroups.map((ag) => ag.name);
 
     // Verify critical animations exist
-    const hasIdle = animNames.includes("idle");
-    const hasWalk = animNames.includes("walk");
-    const hasAttackRight = animNames.includes("attack-melee-right");
-
-    console.log(`- idle animation present: ${hasIdle ? "✅ PASS" : "❌ FAIL"}`);
-    console.log(`- walk animation present: ${hasWalk ? "✅ PASS" : "❌ FAIL"}`);
-    console.log(`- attack-melee-right present: ${hasAttackRight ? "✅ PASS" : "❌ FAIL"}`);
-
-    if (!hasIdle || !hasWalk || !hasAttackRight) {
-      console.error("❌ FAIL: Critical animation groups missing from Kenney model!");
-      engine.dispose();
-      return false;
-    }
+    expect(animNames).toContain("idle");
+    expect(animNames).toContain("walk");
+    expect(animNames).toContain("attack-melee-right");
 
     // Test playing walk animation
-    const walkAnim = result.animationGroups.find(ag => ag.name === "walk");
+    const walkAnim = result.animationGroups.find((ag) => ag.name === "walk");
     if (walkAnim) {
       walkAnim.start(true);
-      console.log(`Walk animation playing: ${walkAnim.isPlaying}`);
+      expect(walkAnim.isPlaying).toBe(true);
       walkAnim.stop();
     }
 
     // Test playing attack animation
-    const attackAnim = result.animationGroups.find(ag => ag.name === "attack-melee-right");
+    const attackAnim = result.animationGroups.find((ag) => ag.name === "attack-melee-right");
     if (attackAnim) {
       attackAnim.start(false);
-      console.log(`Attack animation playing: ${attackAnim.isPlaying}`);
+      expect(attackAnim.isPlaying).toBe(true);
     }
 
     engine.dispose();
-    console.log("=== Player Model Test PASSED ===");
-    return true;
-  } catch (err) {
-    console.error("❌ FAIL: Exception during player model test:", err);
-    engine.dispose();
-    return false;
-  }
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runPlayerModelTest().then(passed => {
-    process.exit(passed ? 0 : 1);
   });
-}
+});
