@@ -1,2 +1,4 @@
 allowBuilds:
   esbuild: true
+nodeVersion: "24.18.0"
+saveExact: true
