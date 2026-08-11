@@ -63,7 +63,17 @@ export function polyfillXHR() {
       try {
         let filePath = this.url;
         if (!path.isAbsolute(filePath)) {
-          filePath = path.join(process.cwd(), "public", filePath);
+          let resolved = path.join(process.cwd(), "public", filePath);
+          if (!fs.existsSync(resolved)) {
+            const playerTex = path.join(process.cwd(), "public", "assets", "characters", "player", filePath);
+            const dungeonTex = path.join(process.cwd(), "public", "assets", "dungeon", filePath);
+            if (fs.existsSync(playerTex)) {
+              resolved = playerTex;
+            } else if (fs.existsSync(dungeonTex)) {
+              resolved = dungeonTex;
+            }
+          }
+          filePath = resolved;
         }
 
         const buffer = fs.readFileSync(filePath);
@@ -98,7 +108,7 @@ export function polyfillXHR() {
       }
     }
 
-    setRequestHeader() {}
+    setRequestHeader() { }
   }
 
   (globalThis as any).XMLHttpRequest = SimpleXMLHttpRequest;

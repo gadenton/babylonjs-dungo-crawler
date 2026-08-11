@@ -10,10 +10,12 @@
     "sourceMap": true,
     "noEmit": true,
     "types": [
-      "vite/client"
+      "vite/client",
+      "node"
     ]
   },
   "include": [
-    "src"
+    "src",
+    "tests"
   ]
 }

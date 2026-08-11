@@ -21,6 +21,9 @@ importers:
         specifier: ^0.43.1
         version: 0.43.1
     devDependencies:
+      '@types/node':
+        specifier: 24.1.0
+        version: 24.1.0
       tsx:
         specifier: ^4.23.11
         version: 4.23.11
@@ -29,7 +32,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^8.2.1
-        version: 8.2.1(esbuild@0.28.2)(tsx@4.23.11)
+        version: 8.2.1(@types/node@24.1.0)(esbuild@0.28.2)(tsx@4.23.11)
 
 packages:
 
@@ -308,6 +311,9 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
+  '@types/node@24.1.0':
+    resolution: {integrity: sha512-ut5FthK5moxFKH2T1CUOC6ctR67rQRvvHdFLCD2Ql6KXmMuCrjsSsRI9UsLCm9M18BMwClv4pn327UvB7eeO1w==}
+
   babylonjs-gltf2interface@9.19.0:
     resolution: {integrity: sha512-VyXEf5QKcE5XaHfUVUmzjqyUro89zZaDjBxRXtbUuc4suHNrBfqOHecfCRvD3PaHtdtN+ZF8A4g1n06Pi70Rlw==}
 
@@ -449,6 +455,9 @@ packages:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  undici-types@7.8.0:
+    resolution: {integrity: sha512-9UJ2xGDvQ43tYyVMpuHlsgApydB8ZKfVYTsLDhXkFL/6gfkp+U8xTGdh8pMJv1SpZna0zxG1DwsKZsreLbXBxw==}
 
   vite@8.2.1:
     resolution: {integrity: sha512-EU/eS7BH3XROHh2YnBefjM6DBKA6ZeMZEYQbj7NLWg5wHYlhB8B/Mayd5XsgWq+NFYccDOTemRpdETWR6Ka/lw==}
@@ -641,6 +650,10 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
+  '@types/node@24.1.0':
+    dependencies:
+      undici-types: 7.8.0
+
   babylonjs-gltf2interface@9.19.0: {}
 
   detect-libc@2.1.2: {}
@@ -782,7 +795,9 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  vite@8.2.1(esbuild@0.28.2)(tsx@4.23.11):
+  undici-types@7.8.0: {}
+
+  vite@8.2.1(@types/node@24.1.0)(esbuild@0.28.2)(tsx@4.23.11):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
@@ -790,6 +805,7 @@ snapshots:
       rolldown: 1.2.3
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 24.1.0
       esbuild: 0.28.2
       fsevents: 2.3.3
       tsx: 4.23.11
