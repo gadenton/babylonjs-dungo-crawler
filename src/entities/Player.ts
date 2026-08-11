@@ -416,6 +416,11 @@ export class Player extends Entity {
       (this.transformNode as Mesh).moveWithCollisions(displacement);
     }
 
+    // Safety height recovery net: if player falls below floor level (y < -0.2), instantly clamp back to y = 0.0
+    if (this.transformNode.position.y < -0.2) {
+      this.transformNode.position.y = 0.0;
+    }
+
     if (this.currentVelocity.lengthSquared() > 0.1) {
       const moveDir = this.currentVelocity.normalizeToNew();
       this.facingDirection = moveDir.clone();

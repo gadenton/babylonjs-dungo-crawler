@@ -150,24 +150,26 @@ export class TileMap {
         const worldX = gx * 2.0 + 1.0;
         const worldZ = gy * 2.0 + 1.0;
 
-        // ── Floor / Door / Stairs base tile ──
-        if (cell.type === TileType.Floor || cell.type === TileType.Door || cell.type === TileType.Stairs) {
-          const floorSelection = selectFloorTile(grid, gx, gy);
-          const sources = this.templateMeshes.get(floorSelection.modelName) || this.templateMeshes.get("template-floor.glb") || [];
+        // ── Floor / Door / Stairs / Wall base floor collider ──
+        if (cell.type === TileType.Floor || cell.type === TileType.Door || cell.type === TileType.Stairs || cell.type === TileType.Wall) {
+          if (cell.type !== TileType.Wall) {
+            const floorSelection = selectFloorTile(grid, gx, gy);
+            const sources = this.templateMeshes.get(floorSelection.modelName) || this.templateMeshes.get("template-floor.glb") || [];
 
-          if (sources.length > 0) {
-            for (const src of sources) {
-              const inst = src.createInstance(`floor_${gx}_${gy}_${src.name}`);
-              inst.position.set(worldX, 0, worldZ);
-              inst.rotationQuaternion = null;
-              inst.rotation.set(0, floorSelection.yRotation, 0);
-              inst.parent = rootNode;
-              allInstances.push(inst);
+            if (sources.length > 0) {
+              for (const src of sources) {
+                const inst = src.createInstance(`floor_${gx}_${gy}_${src.name}`);
+                inst.position.set(worldX, 0, worldZ);
+                inst.rotationQuaternion = null;
+                inst.rotation.set(0, floorSelection.yRotation, 0);
+                inst.parent = rootNode;
+                allInstances.push(inst);
+              }
             }
+            floorCount++;
           }
-          floorCount++;
 
-          // Invisible collision box for floor (pickable for click-to-move and clean Recast NavMesh generation)
+          // Invisible collision box for floor (under floor, door, stairs, AND walls to prevent edge fall-through)
           const fc = CreateBox(`fc_${gx}_${gy}`, { width: 2.0, height: 0.1, depth: 2.0 }, this.scene);
           fc.position.set(worldX, -0.05, worldZ);
           fc.isVisible = false;

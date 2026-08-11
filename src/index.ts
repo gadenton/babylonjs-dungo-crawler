@@ -12,7 +12,7 @@ import { JuiceOverlay } from "./ui/JuiceOverlay";
 import { AudioManager } from "./audio/AudioManager";
 import { TownHubAltar } from "./entities/TownHubAltar";
 import { DungeonPortal } from "./entities/DungeonPortal";
-import { TownHub } from "./town/TownHub";
+import { TownHub, BuiltTownHub } from "./town/TownHub";
 import { TalentUI } from "./ui/TalentUI";
 import { ArchetypeUI } from "./ui/ArchetypeUI";
 import { InventoryUI } from "./ui/InventoryUI";
@@ -75,20 +75,8 @@ async function bootstrap(): Promise<void> {
       "high"
     );
 
-    // 4. Build Static Town Hub Plaza
-    setStatus("4/8 Building Static Town Hub Plaza...");
-    const townHub = new TownHub(scene);
-    console.time("[Index] TownHub build");
-    const builtTown = await townHub.build();
-    console.timeEnd("[Index] TownHub build");
-    const townHubAltar = builtTown.altar;
-
-    // Spawn Dungeon Portal in Town Hub East Portal Alcove
-    const dungeonPortal = new DungeonPortal("dungeonPortal", scene, builtTown.portalPosition);
-
-    // 5. Position Player & State Tracking
-    setStatus("5/8 Spawning Player in Town Hub...");
-    player.transformNode.position = builtTown.spawnPoint.clone();
+    // 4. State Tracking & Shadow Generator
+    const shadowGen = gameEngine.getShadowGenerator();
 
     let inDungeon = false;
     let tileMap: TileMap | null = null;
@@ -96,11 +84,63 @@ async function bootstrap(): Promise<void> {
     const enemies: Enemy[] = [];
     const activeLootDrops: LootDrop[] = [];
 
+    let townHub: TownHub | null = null;
+    let builtTown: BuiltTownHub | null = null;
+    let townHubAltar: TownHubAltar | null = null;
+    let dungeonPortal: DungeonPortal | null = null;
+
     const getCurrentZone = () => (inDungeon ? ("dungeon" as const) : ("town_hub" as const));
     const getDungeonFloor = () => 1;
 
+    // Helper functions to build & dispose Town Hub
+    const disposeTownHub = () => {
+      if (dungeonPortal) {
+        dungeonPortal.dispose();
+        dungeonPortal = null;
+      }
+      if (townHubAltar) {
+        townHubAltar.dispose();
+        townHubAltar = null;
+      }
+      if (townHub) {
+        townHub.dispose();
+        townHub = null;
+      }
+      builtTown = null;
+    };
+
+    // 5. Build Static Town Hub Plaza
+    setStatus("4/8 Building Static Town Hub Plaza...");
+    const buildTownHub = async (): Promise<BuiltTownHub> => {
+      if (townHub && builtTown) return builtTown;
+      townHub = new TownHub(scene);
+      console.time("[Index] TownHub build");
+      const result = await townHub.build();
+      console.timeEnd("[Index] TownHub build");
+      builtTown = result;
+      townHubAltar = result.altar;
+
+      dungeonPortal = new DungeonPortal("dungeonPortal", scene, result.portalPosition);
+
+      dungeonPortal.onInteract.add(() => {
+        dungeonPortalUI.show();
+      });
+
+      if (townHubAltar) {
+        townHubAltar.onInteract.add(() => {
+          archetypeUI.toggle();
+        });
+      }
+
+      if (shadowGen && townHubAltar) {
+        shadowGen.addShadowCaster(townHubAltar.mesh);
+      }
+
+      return result;
+    };
+
     // 6. Wire UI Overlays
-    setStatus("6/8 Wiring UI & Launching Render Loop...");
+    setStatus("5/8 Wiring UI Overlays...");
     const talentUI = new TalentUI(scene, player.talentTree, inputManager);
     const archetypeUI = new ArchetypeUI(scene, player, inputManager, audioManager);
     const inventoryUI = new InventoryUI(scene, player, inputManager);
@@ -108,6 +148,18 @@ async function bootstrap(): Promise<void> {
     const hud = new HUD(scene, player, inputManager);
     const mapOverlay = new MapOverlay(scene, player);
     const dungeonPortalUI = new DungeonPortalUI(scene);
+
+    dungeonPortalUI.onEnterDungeon.add((seed) => {
+      if (!inDungeon) {
+        transitionToDungeon(seed);
+      }
+    });
+
+    const activeTown = await buildTownHub();
+
+    // Position Player in Town Hub
+    setStatus("6/8 Spawning Player in Town Hub...");
+    player.transformNode.position = activeTown.spawnPoint.clone();
 
     // Wire UI Toggle Handlers
     hud.setOnMapButtonClick(() => mapOverlay.toggleOverlay());
@@ -121,7 +173,7 @@ async function bootstrap(): Promise<void> {
       hud.showPickupNotification(msg, "#87CEFA");
     });
 
-    const returnToTownHub = () => {
+    const returnToTownHub = async () => {
       enemies.forEach((e) => e.dispose());
       enemies.length = 0;
 
@@ -144,7 +196,8 @@ async function bootstrap(): Promise<void> {
       mapOverlay.setOverlayVisible(false);
       inDungeon = false;
 
-      player.transformNode.position = builtTown.spawnPoint.clone();
+      const restoredTown = await buildTownHub();
+      player.transformNode.position = restoredTown.spawnPoint.clone();
       hud.showPickupNotification("Returned to Town Hub", "#10B981");
     };
 
@@ -175,10 +228,12 @@ async function bootstrap(): Promise<void> {
         console.log(`[VisualPipelineManager] ${msg}`);
         hud.showPickupNotification(msg, "#A78BFA");
       } else if (e.code === "KeyE" || e.code === "KeyF") {
-        if (!inDungeon && dungeonPortal.isPlayerInProximity(player.position)) {
-          dungeonPortal.interact();
-        } else if (townHubAltar.isPlayerInProximity(player.position)) {
-          townHubAltar.interact();
+        if (!inDungeon) {
+          if (dungeonPortal && dungeonPortal.isPlayerInProximity(player.position)) {
+            dungeonPortal.interact();
+          } else if (townHubAltar && townHubAltar.isPlayerInProximity(player.position)) {
+            townHubAltar.interact();
+          }
         }
       } else if (e.code === "Escape") {
         if (talentUI.isCurrentlyVisible) talentUI.hide();
@@ -194,10 +249,8 @@ async function bootstrap(): Promise<void> {
     player.setInputManager(inputManager);
     cameraRig.attachToTarget(player.transformNode);
 
-    const shadowGen = gameEngine.getShadowGenerator();
     if (shadowGen) {
       shadowGen.addShadowCaster(player.getMesh());
-      shadowGen.addShadowCaster(townHubAltar.mesh);
       player.onModelLoaded.add((loadedMesh) => {
         shadowGen.addShadowCaster(loadedMesh);
         const children = loadedMesh.getChildMeshes();
@@ -214,6 +267,9 @@ async function bootstrap(): Promise<void> {
 
       const seedMsg = customSeed !== undefined ? `Seed: ${customSeed}` : "Random Seed";
       hud.showPickupNotification(`Entering Procedural Dungeon (${seedMsg})...`, "#3B82F6");
+
+      // Completely unload and dispose Town Hub assets from scene
+      disposeTownHub();
 
       const generator = new Generator({ seed: customSeed, minWidth: 55, maxWidth: 75, minHeight: 55, maxHeight: 75 });
       const dungeonGrid = generator.generate();
@@ -281,22 +337,6 @@ async function bootstrap(): Promise<void> {
       }
     };
 
-    // Wire Portal Interaction -> Open Portal UI Modal
-    dungeonPortal.onInteract.add(() => {
-      dungeonPortalUI.show();
-    });
-
-    dungeonPortalUI.onEnterDungeon.add((seed) => {
-      if (!inDungeon) {
-        transitionToDungeon(seed);
-      }
-    });
-
-    // Wire Class Altar Interaction -> Open Archetype UI Modal
-    townHubAltar.onInteract.add(() => {
-      archetypeUI.toggle();
-    });
-
     // Wire Player Attack Action
     const handlePlayerAttack = (targetEnemy?: Enemy) => {
       let target = targetEnemy;
@@ -351,7 +391,7 @@ async function bootstrap(): Promise<void> {
       player.update(deltaTime, enemies, juiceOverlay, audioManager);
       hud.update(deltaTime);
       mapOverlay.update(deltaTime, enemies);
-      if (!inDungeon) dungeonPortal.update(deltaTime);
+      if (!inDungeon && dungeonPortal) dungeonPortal.update(deltaTime);
 
       // Active 3D Loot Drops
       for (let i = activeLootDrops.length - 1; i >= 0; i--) {
@@ -364,9 +404,9 @@ async function bootstrap(): Promise<void> {
       }
 
       // Proximity Checks for Town Entities
-      if (!inDungeon && dungeonPortal.isPlayerInProximity(player.position)) {
+      if (!inDungeon && dungeonPortal && dungeonPortal.isPlayerInProximity(player.position)) {
         hud.showInteractionPrompt("Press [E] or (A) to Enter Dungeon Portal");
-      } else if (townHubAltar.isPlayerInProximity(player.position)) {
+      } else if (!inDungeon && townHubAltar && townHubAltar.isPlayerInProximity(player.position)) {
         hud.showInteractionPrompt("Press [E] or (A) to Access Class Altar");
       } else {
         hud.hideInteractionPrompt();
@@ -405,8 +445,7 @@ async function bootstrap(): Promise<void> {
       unbindAutoSave();
       activeLootDrops.forEach((d) => d.dispose());
       enemies.forEach((e) => e.dispose());
-      townHubAltar.dispose();
-      dungeonPortal.dispose();
+      disposeTownHub();
       visualPipelineManager.dispose();
       saveLoadUI.dispose();
       talentUI.dispose();
@@ -419,7 +458,6 @@ async function bootstrap(): Promise<void> {
       audioManager.dispose();
       if (navMeshManager) navMeshManager.dispose();
       if (tileMap) tileMap.dispose();
-      townHub.dispose();
       inputManager.dispose();
       player.dispose();
       cameraRig.dispose();

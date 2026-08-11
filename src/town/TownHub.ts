@@ -41,6 +41,9 @@ export class TownHub {
   private templateMeshes: Map<string, Mesh[]> = new Map();
   private templateRoots: TransformNode[] = [];
   private isLoaded: boolean = false;
+  private rootNode: TransformNode | null = null;
+  private lights: PointLight[] = [];
+  private extraMeshes: Mesh[] = [];
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -124,6 +127,9 @@ export class TownHub {
 
     console.log("[TownHub] Building static autotiled 5-wing sanctuary Town Hub plaza...");
     const rootNode = new TransformNode("townHubRoot", this.scene);
+    this.rootNode = rootNode;
+    this.lights = [];
+    this.extraMeshes = [];
 
     const floorSources = this.templateMeshes.get("template-floor.glb") || [];
     const floorDetailSources = this.templateMeshes.get("template-floor-detail.glb") || floorSources;
@@ -341,10 +347,12 @@ export class TownHub {
     const lightTorch1 = new PointLight("terraceTorchLight1", columnPos1.add(new Vector3(0, 3.2, 0)), this.scene);
     lightTorch1.diffuse = new Color3(1.0, 0.6, 0.2);
     lightTorch1.intensity = 2.5;
+    this.lights.push(lightTorch1);
 
     const lightTorch2 = new PointLight("terraceTorchLight2", columnPos2.add(new Vector3(0, 3.2, 0)), this.scene);
     lightTorch2.diffuse = new Color3(1.0, 0.6, 0.2);
     lightTorch2.intensity = 2.5;
+    this.lights.push(lightTorch2);
 
     // 5. West Adventurer Encampment & Stash Props
     const campPos = new Vector3(5.0, 0, 15.0);
@@ -364,6 +372,7 @@ export class TownHub {
     const campfireLight = new PointLight("campfireLight", campPos.add(new Vector3(0, 0.8, 0)), this.scene);
     campfireLight.diffuse = new Color3(1.0, 0.5, 0.1);
     campfireLight.intensity = 3.0;
+    this.lights.push(campfireLight);
 
     const fireBase = CreateCylinder("fireLogs", { height: 0.3, diameter: 1.0, tessellation: 12 }, this.scene);
     fireBase.position = campPos.add(new Vector3(0, 0.15, 0));
@@ -371,6 +380,8 @@ export class TownHub {
     fireMat.emissiveColor = new Color3(1.0, 0.4, 0.05);
     fireMat.diffuseColor = new Color3(0.3, 0.1, 0.0);
     fireBase.material = fireMat;
+    fireBase.parent = rootNode;
+    this.extraMeshes.push(fireBase);
 
     // 6. East Portal Alcove Archway & Props
     const portalAlcovePos = new Vector3(35.0, 0, 15.0);
@@ -392,10 +403,12 @@ export class TownHub {
     const plazaTorchLight1 = new PointLight("plazaTorch1", new Vector3(15.0, 2.0, 11.0), this.scene);
     plazaTorchLight1.diffuse = new Color3(1.0, 0.65, 0.25);
     plazaTorchLight1.intensity = 2.0;
+    this.lights.push(plazaTorchLight1);
 
     const plazaTorchLight2 = new PointLight("plazaTorch2", new Vector3(25.0, 2.0, 11.0), this.scene);
     plazaTorchLight2.diffuse = new Color3(1.0, 0.65, 0.25);
     plazaTorchLight2.intensity = 2.0;
+    this.lights.push(plazaTorchLight2);
 
     // 9. Merge Collision Geometry
     console.log("[TownHub] Merging collision geometry...");
@@ -456,6 +469,18 @@ export class TownHub {
   }
 
   public dispose(): void {
+    for (const light of this.lights) {
+      light.dispose();
+    }
+    this.lights = [];
+    for (const m of this.extraMeshes) {
+      m.dispose();
+    }
+    this.extraMeshes = [];
+    if (this.rootNode) {
+      this.rootNode.dispose(false, true);
+      this.rootNode = null;
+    }
     for (const root of this.templateRoots) {
       root.dispose(false, true);
     }

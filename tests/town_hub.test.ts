@@ -28,4 +28,22 @@ describe("Town Hub Plaza Environment Build", () => {
     townHub.dispose();
     engine.dispose();
   });
+
+  it("should completely remove townHubRoot and all lights from scene upon dispose()", async () => {
+    polyfillXHR();
+
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+
+    const townHub = new TownHub(scene);
+    await townHub.build();
+
+    expect(scene.getNodeByName("townHubRoot")).not.toBeNull();
+
+    townHub.dispose();
+
+    expect(scene.getNodeByName("townHubRoot")).toBeNull();
+
+    engine.dispose();
+  });
 });
