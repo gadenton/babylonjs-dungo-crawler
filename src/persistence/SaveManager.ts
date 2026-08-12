@@ -19,6 +19,7 @@ export interface GameSaveStateV1 {
     level: number;
     xp: number;
     activeArchetypeId: ArchetypeType;
+    unlockedArchetypes?: ArchetypeType[];
     equippedSkillIds: (string | null)[];
     currentHp: number;
     currentMana: number;
@@ -116,6 +117,7 @@ export class SaveManager {
         level: player.level,
         xp: player.xp,
         activeArchetypeId: player.activeArchetypeId,
+        unlockedArchetypes: Array.from(player.unlockedArchetypes),
         equippedSkillIds,
         currentHp: player.health.current,
         currentMana: player.stats.currentMana,
@@ -163,7 +165,12 @@ export class SaveManager {
     player.xp = saveState.player.xp;
     player.talentTree.setPlayerLevel(player.level);
 
-    // 2. Restore Archetype
+    // 2. Restore Archetype & Unlocked Classes
+    if (saveState.player.unlockedArchetypes && Array.isArray(saveState.player.unlockedArchetypes)) {
+      player.unlockedArchetypes = new Set(saveState.player.unlockedArchetypes);
+    } else {
+      player.unlockedArchetypes = new Set([saveState.player.activeArchetypeId]);
+    }
     player.setArchetype(saveState.player.activeArchetypeId);
 
     // 3. Restore Talent Tree
@@ -195,7 +202,22 @@ export class SaveManager {
     player.stats.setMana(saveState.player.currentMana);
 
     // 7. Reset Position to Town Hub Spawn (Loading always returns player to Town Hub)
-    player.transformNode.position = new Vector3(10.0, 0.0, 6.0);
+    if (
+      saveState.player.position &&
+      typeof saveState.player.position.x === "number" &&
+      saveState.player.position.x >= 8.0 &&
+      saveState.player.position.x <= 32.0 &&
+      saveState.player.position.z >= 8.0 &&
+      saveState.player.position.z <= 32.0
+    ) {
+      player.transformNode.position = new Vector3(
+        saveState.player.position.x,
+        saveState.player.position.y,
+        saveState.player.position.z
+      );
+    } else {
+      player.transformNode.position = new Vector3(20.0, 0.0, 15.0);
+    }
 
     // 8. Trigger Zone Load if callback provided
     if (onZoneLoadRequested && saveState.world) {

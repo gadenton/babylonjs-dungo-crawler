@@ -120,6 +120,7 @@ export class ClassSelectUI {
     contentStack.paddingTop = "15px";
     contentStack.paddingLeft = "10px";
     contentStack.paddingRight = "10px";
+    contentStack.isHitTestVisible = false;
     card.addControl(contentStack);
 
     const nameText = new TextBlock(`name_${type}`, archDef.name.toUpperCase());
@@ -127,12 +128,14 @@ export class ClassSelectUI {
     nameText.fontSize = 16;
     nameText.fontWeight = "bold";
     nameText.height = "26px";
+    nameText.isHitTestVisible = false;
     contentStack.addControl(nameText);
 
     const titleText = new TextBlock(`title_${type}`, archDef.title);
     titleText.color = "#87CEFA";
     titleText.fontSize = 11;
     titleText.height = "20px";
+    titleText.isHitTestVisible = false;
     contentStack.addControl(titleText);
 
     const descText = new TextBlock(`desc_${type}`, archDef.description);
@@ -141,6 +144,7 @@ export class ClassSelectUI {
     descText.height = "110px";
     descText.textWrapping = true;
     descText.paddingTop = "10px";
+    descText.isHitTestVisible = false;
     contentStack.addControl(descText);
 
     const skillText = new TextBlock(`skill_${type}`, `Skill:\n${archDef.signatureSkill.def.name}`);
@@ -149,18 +153,24 @@ export class ClassSelectUI {
     skillText.fontWeight = "bold";
     skillText.height = "45px";
     skillText.paddingTop = "10px";
+    skillText.isHitTestVisible = false;
     contentStack.addControl(skillText);
+
+    const selectClassAction = () => {
+      if (this.audioManager) this.audioManager.playUIClickSFX();
+      this.selectedArchetype = type;
+      this.updateCardSelections();
+    };
+
+    card.isHitTestVisible = true;
+    card.onPointerClickObservable.add(selectClassAction);
 
     const nativeBtn = Button.CreateSimpleButton(`btn_${type}`, "");
     nativeBtn.width = "100%";
     nativeBtn.height = "100%";
     nativeBtn.background = "rgba(0,0,0,0)";
     nativeBtn.thickness = 0;
-    nativeBtn.onPointerClickObservable.add(() => {
-      if (this.audioManager) this.audioManager.playUIClickSFX();
-      this.selectedArchetype = type;
-      this.updateCardSelections();
-    });
+    nativeBtn.onPointerClickObservable.add(selectClassAction);
     card.addControl(nativeBtn);
 
     this.classCards.set(type, card);

@@ -29,6 +29,7 @@ export class Player extends Entity {
   public level: number = 1;
   public xp: number = 0;
   public activeArchetypeId: ArchetypeType = "tank";
+  public unlockedArchetypes: Set<ArchetypeType> = new Set<ArchetypeType>(["tank"]);
   public equippedSkills: (Skill | null)[] = [null, null, null, null, null];
   public talentTree: TalentTree;
 
@@ -289,12 +290,39 @@ export class Player extends Entity {
     }
   }
 
-  // --- Archetype Swapping ---
+  // --- Archetype Unlocking & Swapping ---
+  public getMaxArchetypeSlots(): number {
+    if (this.level >= 30) return 4;
+    if (this.level >= 20) return 3;
+    if (this.level >= 10) return 2;
+    return 1;
+  }
+
+  public getAvailableUnlockTokens(): number {
+    return Math.max(0, this.getMaxArchetypeSlots() - this.unlockedArchetypes.size);
+  }
+
+  public unlockArchetype(type: ArchetypeType): boolean {
+    if (this.unlockedArchetypes.has(type)) return true;
+    if (this.getAvailableUnlockTokens() > 0) {
+      this.unlockedArchetypes.add(type);
+      return true;
+    }
+    return false;
+  }
+
+  public isArchetypeUnlocked(type: ArchetypeType): boolean {
+    return this.unlockedArchetypes.has(type);
+  }
+
   public setArchetype(archetypeId: ArchetypeType): boolean {
     const arch = ArchetypeManager.getArchetype(archetypeId);
     if (!arch) return false;
-    if (!ArchetypeManager.isArchetypeUnlocked(archetypeId, this.level)) {
-      return false;
+
+    if (!this.unlockedArchetypes.has(archetypeId)) {
+      if (!this.unlockArchetype(archetypeId)) {
+        return false;
+      }
     }
 
     // 1. Apply base stats and passive modifiers
