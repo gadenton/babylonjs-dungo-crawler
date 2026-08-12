@@ -71,6 +71,7 @@ async function bootstrap(): Promise<void> {
       lookAheadDist: 3.5,
     });
     const player = new Player("p1", scene);
+    player.transformNode.position = new Vector3(20.0, 0.0, 15.0);
 
     // 3. Initialize Visual Post-Processing Pipeline
     setStatus("3/8 Initializing Visual Pipeline...");
@@ -187,6 +188,7 @@ async function bootstrap(): Promise<void> {
     });
 
     classSelectUI.onArchetypeSelected.add((archetype) => {
+      player.unlockedArchetypes = new Set([archetype]);
       player.setArchetype(archetype);
       SaveManager.save("autosave", player);
       classSelectUI.hide();

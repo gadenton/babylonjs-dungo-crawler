@@ -48,11 +48,11 @@ describe("Save/Load Persistence & Dungeon Cleanup", () => {
     expect(player.level).toBe(5);
     expect(player.inventory.gold).toBe(500);
 
-    // Verify player position was reset to Town Hub spawn (10, 0, 6) instead of keeping dungeon coords
+    // Verify player position was reset to Town Hub spawn (20, 0, 15) instead of keeping dungeon coords
     const pos = player.transformNode.position;
-    expect(pos.x).toBeCloseTo(10.0, 2);
+    expect(pos.x).toBeCloseTo(20.0, 2);
     expect(pos.y).toBeCloseTo(0.0, 2);
-    expect(pos.z).toBeCloseTo(6.0, 2);
+    expect(pos.z).toBeCloseTo(15.0, 2);
 
     // Clean up test save key
     SaveManager.delete(slotId);
