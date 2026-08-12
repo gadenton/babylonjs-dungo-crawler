@@ -1,48 +1,70 @@
-# Project: Babylon.js Dungo Crawler Enhancements
+# Project: Babylon.js Dungeon Crawler ARPG — Main Menu & Settings System
 
 ## Architecture
-- **Rendering & Engine**: Babylon.js v9, WebGL2, GPU instancing via `mesh.createInstance()`, `VisualPipelineManager` (SSAO2, Bloom, ACES tone mapping).
-- **Grid & World**: 40x40 grid, 2.0 unit spacing (`worldX = gx * 2.0 + 1.0`, `worldZ = gy * 2.0 + 1.0`).
-- **Tile System (`src/dungeon/TileMap.ts`)**: Preloads Kenney 3D Modular Dungeon GLB assets (`template-floor.glb`, `template-floor-detail-a.glb`, `template-wall.glb`, `template-wall-corner.glb`, `template-wall-half.glb`, `gate-door.glb`, `stairs.glb`). Uses an 8-neighbor bitmask lookup algorithm to evaluate cell neighbor configurations and select exact GLB models (straight wall, inner corner, outer corner, end cap, detail variants) and Y-rotations while strictly preserving GPU instancing (`createInstance()`) and merged collision meshes (`mergedFloors`, `mergedWalls`).
-- **Town Hub & Scene Transition (`src/town/TownHub.ts`, `src/core/GameStateManager.ts`)**: Hand-designed static 10x10 safe courtyard plaza constructed from Kenney GLB assets with zero enemies. Features a controllable player, camera rig, and interactive transition altar/portal (`TownHubAltar.ts`). Transition triggers loading curtain, disposes/hides town root, generates 40x40 BSP dungeon grid via `Generator.ts`, constructs `TileMap`, builds Recast WASM NavMesh via `NavMeshManager.ts`, and spawns player and enemies in the procedural dungeon.
-- **Navigation & Pathfinding**: Recast WASM (`src/dungeon/NavMeshManager.ts`).
-- **Code Layout**:
-  - `src/dungeon/Generator.ts`: BSP dungeon grid generator (40x40 grid with `CellMetadata`).
-  - `src/dungeon/TileMap.ts`: Asset preloader, 8-neighbor bitmask algorithm, GPU mesh instancing, merged colliders.
-  - `src/town/TownHub.ts`: Static town hub environment builder (10x10 plaza, colliders, lighting, spawn points).
-  - `src/core/GameStateManager.ts`: Central state manager (`TOWN_HUB` <-> `DUNGEON`), scene lifecycle, level loading & curtain transitions.
-  - `src/entities/TownHubAltar.ts`: Interactive portal / altar entity in Town Hub.
-  - `src/entities/Player.ts`, `src/camera/CameraRig.ts`: Persistent player entity and isometric camera rig.
-  - `src/index.ts`: Game entry point bootstrap sequence (starts in Town Hub, transitions to Dungeon on interaction).
+- **State Management**: `GameStateManager.ts` central state machine handling states `MAIN_MENU | TOWN_HUB | DUNGEON | PAUSED`.
+- **Persistence Subsystem**: `SaveManager.ts` scanning slots (`autosave`, `slot_1`, `slot_2`, `slot_3`) with `getMostRecentSave()` for R2 Continue flow.
+- **Audio & Visual Subsystems**: `AudioManager.ts` linear volume getters/setters & storage persistence; `VisualPipelineManager.ts` graphics preset persistence for R4.
+- **Rendering & 3D Scene**: `CameraRig.ts` panorama drift mode & `GameEngine` ambient fog configuration for R1 3D Town Hub background.
+- **UI System (`@babylonjs/gui/2D`)**: Dark fantasy styled overlays (`rgba(12, 16, 26, 0.95)` container, `#DAA520` 3px gold borders, `#FFD700` text).
+  - `MainMenuUI.ts` (R1 & R2)
+  - `ClassSelectionModal.ts` (R3)
+  - `SettingsUI.ts` (R4)
+  - `PauseMenuUI.ts` (R5)
+- **Input Navigation**: `InputManager.ts` unified focus highlight cycling for keyboard, mouse, and gamepad.
 
 ## Feature Inventory
-Every feature from the Survey phase is enumerated below with its assigned milestone.
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Neighbor Lookup Bitmask | 8-neighbor bitmask algorithm in `TileMap.ts` to classify cell topologies (straight wall, inner corner, outer corner, end cap) | M1 | survey |
-| 2 | Model & Rotation Selection | Select precise Kenney GLB model (`template-wall.glb`, `template-wall-corner.glb`, `template-wall-half.glb`, etc.) and Y-rotation per cell | M1 | survey |
-| 3 | GPU Instancing Preservation | Preload GLBs and instantiate via `mesh.createInstance()`, maintaining `mergedFloors` and `mergedWalls` | M1 | survey |
-| 4 | Floor & Detail Variety | Floor & wall detail variants (`template-floor-detail-a.glb`, `template-wall-detail-a.glb`) via seeded hash | M1 | survey |
-| 5 | Door & Gate Placement | Visually distinct `gate-door.glb` piece and colliders for door cells | M1 | survey |
-| 6 | Static Town Hub Layout | 10x10 hand-designed safe courtyard plaza using Kenney GLB tiles with zero enemies | M2 | survey |
-| 7 | Town Player Control | Controllable player & isometric camera rig in Town Hub | M2 | survey |
-| 8 | Interactive Altar/Portal | Proximity interaction (`[E]`/`[F]`) on `TownHubAltar` / Dungeon Portal | M2 | survey |
-| 9 | State & Scene Transition | `GameStateManager` handling `TOWN_HUB` -> `DUNGEON` transition with loading curtain & mesh lifecycle | M3 | survey |
-| 10 | On-Demand Dungeon & NavMesh | Generate BSP dungeon, `TileMap`, and Recast WASM NavMesh on transition | M3 | survey |
-| 11 | Main Thread Yield | Yield every 10 rows (`await setTimeout(0)`) and before heavy merge/navmesh steps | M1 | survey |
+| 1 | State Management & Save Scanner API | `GameStateManager` state machine and `SaveManager.getMostRecentSave()` API | Stage 1 (M1) | Survey / R2 |
+| 2 | Audio & Graphics Persistence APIs | `AudioManager` linear volume getters & `VisualPipelineManager` preset storage persistence | Stage 1 (M1) | Survey / R4 |
+| 3 | 3D Camera Panorama & Ambient Fog | 3D Town Hub overview camera drift & ambient fog setup | Stage 2 (M2) | R1 |
+| 4 | Main Menu UI & Continue Detection | Dark fantasy Main Menu overlay with Continue/New Game/Load/Settings buttons and gamepad/keyboard navigation | Stage 2 (M2) | R1, R2 |
+| 5 | Class Archetype Selection Modal | Hero archetype modal for Level 1 New Game creation | Stage 3 (M3) | R3 |
+| 6 | Settings Overlay & SaveLoad Integration | Volume sliders, Graphics preset picker, Controls table, and SaveLoadUI hookup | Stage 4 (M4) | R4 |
+| 7 | In-Game Pause Menu & Unload Transition | `[Esc]` key pause menu and entity cleanup/transition back to 3D Main Menu panorama | Stage 5 (M5) | R5 |
+| 8 | E2E Integration & Verification | 100% pass of test suite, adversarial testing, and forensic audit | Stage 6 (M6) | Quality Gate |
 
-## Milestones
-| # | Name | Scope | Dependencies | Status |
-|---|------|-------|-------------|--------|
-| M1 | Tile Connectivity & GPU Instancing | `TileMap.ts` & `Generator.ts`: neighbor bitmask, asset preload, corner/straight/end-cap selection, floor variety, door placement, instancing preservation | None | DONE |
-| M2 | Static Town Hub & Player Setup | `src/town/TownHub.ts` & `TownHubAltar.ts`: static 10x10 plaza, colliders, player spawning, interaction prompt | None | DONE |
-| M3 | Level Transition & Dungeon Trigger | `GameStateManager.ts` & `index.ts`: bootstrap update, portal interaction trigger, loading curtain, transition to procedural dungeon & navmesh | M1, M2 | PLANNED |
-| M4 | Final E2E Suite & Hardening | E2E test suite (Tiers 1-4), adversarial coverage, build & typecheck verification, forensic audit | M1, M2, M3 | PLANNED |
+## Milestones & Execution Stages
+| Stage | Milestone | Scope | Dependencies | Status |
+|-------|-----------|-------|-------------|--------|
+| **Stage 1** | M1: Core Architecture & Persistence APIs | `SaveManager.getMostRecentSave()`, `GameStateManager`, `AudioManager` linear volume/persistence, `VisualPipelineManager` persistence | None | PLANNED (Next) |
+| **Stage 2** | M2: Main Menu UI & 3D Panorama | 3D Town Hub camera drift, ambient fog, `MainMenuUI.ts`, recent save Continue flow | Stage 1 | PLANNED |
+| **Stage 3** | M3: Class Archetype Selection | `ClassSelectionModal.ts` for Hero Archetype picking & fresh save initialization | Stage 2 | PLANNED |
+| **Stage 4** | M4: Settings Overlay & SaveLoad UI | `SettingsUI.ts` (audio sliders, graphics dropdown, controls reference table) & `SaveLoadUI` integration | Stage 2 | PLANNED |
+| **Stage 5** | M5: Pause Menu & Main Menu Transition | `PauseMenuUI.ts`, `[Esc]` binding, render loop pause, gameplay entity unloading & return to Main Menu | Stage 2, Stage 4 | PLANNED |
+| **Stage 6** | M6: E2E Testing & Quality Verification | Dual track E2E tests, adversarial coverage, reviewer/challenger/auditor verification | Stage 1-5 | PLANNED |
+
+*Note: User instruction update requires pausing and reporting back to user for review immediately upon completion of Stage 1 before proceeding to Stage 2.*
 
 ## Interface Contracts
-### TownHub ↔ GameStateManager
-- `TownHub.build(scene: Scene): { rootNode: TransformNode, mergedFloors: Mesh, mergedWalls: Mesh, spawnPoint: Vector3 }`
-- `GameStateManager.transitionToDungeon(): Promise<void>`
+### `SaveManager`
+- `getMostRecentSave(): { slotId: string; metadata: SaveMetadata } | null`
 
-### TileMap ↔ Generator
-- `TileMap.buildFromGrid(grid: DungeonGrid): Promise<BuiltDungeon>`
+### `GameStateManager`
+- `getState(): 'MAIN_MENU' | 'TOWN_HUB' | 'DUNGEON' | 'PAUSED'`
+- `setState(newState: GameState): void`
+- `onStateChanged: Observable<GameState>`
+
+### `AudioManager`
+- `getMasterVolumeLinear(): number`
+- `getSFXVolumeLinear(): number`
+- `getMusicVolumeLinear(): number`
+- `saveAudioSettings(): void`
+- `loadAudioSettings(): void`
+
+### `VisualPipelineManager`
+- `saveGraphicsSettings(): void`
+- `loadGraphicsSettings(): void`
+
+## Code Layout
+- `src/core/GameStateManager.ts` (New)
+- `src/persistence/SaveManager.ts` (Modified)
+- `src/audio/AudioManager.ts` (Modified)
+- `src/rendering/VisualPipelineManager.ts` (Modified)
+- `src/camera/CameraRig.ts` (Modified)
+- `src/core/Engine.ts` (Modified)
+- `src/ui/MainMenuUI.ts` (New)
+- `src/ui/ClassSelectionModal.ts` (New)
+- `src/ui/SettingsUI.ts` (New)
+- `src/ui/PauseMenuUI.ts` (New)
+- `src/index.ts` (Modified)
