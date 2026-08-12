@@ -1,4 +1,5 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { StorageAdapter } from "../core/StorageAdapter";
 
 export type AudioBus = "master" | "music" | "sfx" | "ui";
 
@@ -25,13 +26,16 @@ export class AudioManager {
   private isUnlocked: boolean = false;
 
   // Sidechain Ducking Timer
-  private duckingReleaseTimer: number | null = null;
+  private duckingReleaseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.initAudioContext();
+    this.loadAudioSettings();
   }
 
   private initAudioContext(): void {
+    if (typeof window === "undefined") return;
+
     const AudioCtxClass =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -73,6 +77,8 @@ export class AudioManager {
   }
 
   private setupUnlockListener(): void {
+    if (typeof window === "undefined") return;
+
     const unlock = () => {
       if (this.audioCtx && this.audioCtx.state === "suspended") {
         this.audioCtx.resume().then(() => {
@@ -132,6 +138,46 @@ export class AudioManager {
     this.setBusVolumeDb("ui", this.linearToDb(vol));
   }
 
+  // Linear Volume Getters
+  public getMasterVolumeLinear(): number {
+    return this.dbToLinear(this.getBusVolumeDb("master"));
+  }
+
+  public getSFXVolumeLinear(): number {
+    return this.dbToLinear(this.getBusVolumeDb("sfx"));
+  }
+
+  public getMusicVolumeLinear(): number {
+    return this.dbToLinear(this.getBusVolumeDb("music"));
+  }
+
+  // Audio Settings Persistence
+  public saveAudioSettings(): void {
+    const data = {
+      master: this.getMasterVolumeLinear(),
+      sfx: this.getSFXVolumeLinear(),
+      music: this.getMusicVolumeLinear(),
+    };
+    StorageAdapter.save("dungo_audio_settings", data, 1, "settings");
+  }
+
+  public loadAudioSettings(): void {
+    const data = StorageAdapter.load<{ master?: number; sfx?: number; music?: number }>(
+      "dungo_audio_settings",
+      1
+    );
+    if (!data) return;
+    if (typeof data.master === "number") {
+      this.setMasterVolume(data.master);
+    }
+    if (typeof data.sfx === "number") {
+      this.setSFXVolume(data.sfx);
+    }
+    if (typeof data.music === "number") {
+      this.setMusicVolume(data.music);
+    }
+  }
+
   private applyBusVolumes(): void {
     if (!this.audioCtx) return;
     const now = this.audioCtx.currentTime;
@@ -181,7 +227,7 @@ export class AudioManager {
     }
 
     // Smooth Release (300ms) after durationMs
-    this.duckingReleaseTimer = window.setTimeout(() => {
+    this.duckingReleaseTimer = setTimeout(() => {
       if (this.audioCtx && this.musicDuckingGain) {
         const releaseTime = this.audioCtx.currentTime;
         this.musicDuckingGain.gain.setTargetAtTime(1.0, releaseTime, 0.3);
@@ -387,6 +433,32 @@ export class AudioManager {
 
     osc.start(now);
     osc.stop(now + 0.18);
+  }
+
+  public playUIClickSFX(): void {
+    if (!this.audioCtx || !this.uiGain) return;
+    this.ensureContextResumed();
+    const now = this.audioCtx.currentTime;
+    const osc = this.audioCtx.createOscillator();
+    const gain = this.audioCtx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(300, now + 0.05);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+
+    osc.connect(gain);
+    gain.connect(this.uiGain);
+
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+
+    osc.start(now);
+    osc.stop(now + 0.05);
   }
 
   private playSyntheticBeep(bus: AudioBus, isCrit: boolean = false): void {

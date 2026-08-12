@@ -20,6 +20,11 @@ import { SaveLoadUI } from "./ui/SaveLoadUI";
 import { HUD } from "./ui/HUD";
 import { MapOverlay } from "./ui/MapOverlay";
 import { DungeonPortalUI } from "./ui/DungeonPortalUI";
+import { MainMenuUI } from "./ui/MainMenuUI";
+import { ClassSelectUI } from "./ui/ClassSelectUI";
+import { SettingsUI } from "./ui/SettingsUI";
+import { PauseMenuUI } from "./ui/PauseMenuUI";
+import { GameStateManager } from "./core/GameStateManager";
 import { LootDrop } from "./entities/LootDrop";
 import { VisualPipelineManager, GraphicsPreset } from "./rendering/VisualPipelineManager";
 import { SaveManager } from "./persistence/SaveManager";
@@ -140,7 +145,9 @@ async function bootstrap(): Promise<void> {
     };
 
     // 6. Wire UI Overlays
-    setStatus("5/8 Wiring UI Overlays...");
+    setStatus("5/8 Wiring UI Overlays & Menu Systems...");
+    const gameStateManager = new GameStateManager("MAIN_MENU");
+
     const talentUI = new TalentUI(scene, player.talentTree, inputManager);
     const archetypeUI = new ArchetypeUI(scene, player, inputManager, audioManager);
     const inventoryUI = new InventoryUI(scene, player, inputManager);
@@ -148,6 +155,64 @@ async function bootstrap(): Promise<void> {
     const hud = new HUD(scene, player, inputManager);
     const mapOverlay = new MapOverlay(scene, player);
     const dungeonPortalUI = new DungeonPortalUI(scene);
+
+    const mainMenuUI = new MainMenuUI(scene, audioManager, inputManager);
+    const classSelectUI = new ClassSelectUI(scene, audioManager, inputManager);
+    const settingsUI = new SettingsUI(scene, audioManager, visualPipelineManager, inputManager);
+    const pauseMenuUI = new PauseMenuUI(scene, audioManager, inputManager);
+
+    // Initial State: Main Menu active, HUD hidden
+    hud.setVisible(false);
+    mainMenuUI.show();
+
+    // Main Menu Observables
+    mainMenuUI.onContinueRequested.add((slotId) => {
+      SaveManager.load(slotId, player);
+      mainMenuUI.hide();
+      hud.setVisible(true);
+      gameStateManager.setState("TOWN_HUB");
+    });
+
+    mainMenuUI.onNewGameRequested.add(() => {
+      mainMenuUI.hide();
+      classSelectUI.show();
+    });
+
+    mainMenuUI.onLoadSaveRequested.add(() => {
+      saveLoadUI.show();
+    });
+
+    mainMenuUI.onSettingsRequested.add(() => {
+      settingsUI.show();
+    });
+
+    classSelectUI.onArchetypeSelected.add((archetype) => {
+      player.setArchetype(archetype);
+      SaveManager.save("autosave", player);
+      classSelectUI.hide();
+      hud.setVisible(true);
+      gameStateManager.setState("TOWN_HUB");
+    });
+
+    // Pause Menu Observables
+    pauseMenuUI.onResumeRequested.add(() => {
+      gameStateManager.setPaused(false);
+    });
+
+    pauseMenuUI.onSaveLoadRequested.add(() => {
+      saveLoadUI.show();
+    });
+
+    pauseMenuUI.onSettingsRequested.add(() => {
+      settingsUI.show();
+    });
+
+    pauseMenuUI.onMainMenuRequested.add(() => {
+      returnToTownHub();
+      hud.setVisible(false);
+      mainMenuUI.show();
+      gameStateManager.setState("MAIN_MENU");
+    });
 
     dungeonPortalUI.onEnterDungeon.add((seed) => {
       if (!inDungeon) {
@@ -210,6 +275,8 @@ async function bootstrap(): Promise<void> {
 
     // Keyboard shortcut listeners for UI overlays & interactions
     window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (gameStateManager.getState() === "MAIN_MENU") return;
+
       if (e.code === "KeyM" || e.code === "Tab") {
         e.preventDefault();
         mapOverlay.toggleOverlay();
@@ -237,10 +304,16 @@ async function bootstrap(): Promise<void> {
         }
       } else if (e.code === "Escape") {
         if (talentUI.isCurrentlyVisible) talentUI.hide();
-        if (archetypeUI.isCurrentlyVisible) archetypeUI.hide();
-        if (inventoryUI.isCurrentlyVisible) inventoryUI.hide();
-        if (saveLoadUI.isVisible()) saveLoadUI.hide();
-        if (dungeonPortalUI.isVisible) dungeonPortalUI.hide();
+        else if (archetypeUI.isCurrentlyVisible) archetypeUI.hide();
+        else if (inventoryUI.isCurrentlyVisible) inventoryUI.hide();
+        else if (saveLoadUI.isVisible()) saveLoadUI.hide();
+        else if (dungeonPortalUI.isVisible) dungeonPortalUI.hide();
+        else if (settingsUI.isVisible()) settingsUI.hide();
+        else if (classSelectUI.isVisible()) classSelectUI.hide();
+        else {
+          pauseMenuUI.toggle();
+          gameStateManager.setPaused(pauseMenuUI.isVisible());
+        }
         mapOverlay.setOverlayVisible(false);
       }
     });
@@ -377,16 +450,36 @@ async function bootstrap(): Promise<void> {
     };
 
     // 7. Main Render Loop Setup
+    let menuCameraAngle = 0;
     setStatus("7/8 Starting Main Game Engine Render Loop...");
     gameEngine.setRenderLoopCallback(() => {
       const rawDeltaTime = gameEngine.getEngine().getDeltaTime() / 1000.0;
       if (rawDeltaTime <= 0) return;
 
       juiceOverlay.update(rawDeltaTime);
-
       if (juiceOverlay.isHitStopped()) return;
 
       const deltaTime = rawDeltaTime;
+      const state = gameStateManager.getState();
+
+      if (state === "MAIN_MENU") {
+        // Slow cinematic camera drift over Town Hub
+        menuCameraAngle += deltaTime * 0.12;
+        const radius = 22.0;
+        const camX = 10.0 + Math.sin(menuCameraAngle) * radius;
+        const camZ = 6.0 + Math.cos(menuCameraAngle) * radius;
+        const camY = 12.0 + Math.sin(menuCameraAngle * 0.5) * 3.0;
+
+        const camera = cameraRig.getCamera();
+        camera.position = new Vector3(camX, camY, camZ);
+        camera.setTarget(new Vector3(10.0, 1.0, 6.0));
+        return;
+      }
+
+      if (state === "PAUSED") {
+        return;
+      }
+
       inputManager.update(deltaTime);
       player.update(deltaTime, enemies, juiceOverlay, audioManager);
       hud.update(deltaTime);
@@ -447,6 +540,10 @@ async function bootstrap(): Promise<void> {
       enemies.forEach((e) => e.dispose());
       disposeTownHub();
       visualPipelineManager.dispose();
+      pauseMenuUI.dispose();
+      settingsUI.dispose();
+      classSelectUI.dispose();
+      mainMenuUI.dispose();
       saveLoadUI.dispose();
       talentUI.dispose();
       archetypeUI.dispose();

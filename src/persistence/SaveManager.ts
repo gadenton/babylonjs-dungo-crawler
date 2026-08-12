@@ -228,6 +228,23 @@ export class SaveManager {
     };
   }
 
+  /** Scan save slots (autosave, slot_1, slot_2, slot_3) and return the save with the maximum timestamp */
+  public static getMostRecentSave(): { slotId: string; metadata: SaveMetadata } | null {
+    const slots = ["autosave", "slot_1", "slot_2", "slot_3"];
+    let maxTimestamp = -1;
+    let mostRecent: { slotId: string; metadata: SaveMetadata } | null = null;
+
+    for (const slotId of slots) {
+      const metadata = this.getMetadata(slotId);
+      if (metadata && typeof metadata.timestamp === "number" && metadata.timestamp > maxTimestamp) {
+        maxTimestamp = metadata.timestamp;
+        mostRecent = { slotId, metadata };
+      }
+    }
+
+    return mostRecent;
+  }
+
   /** Register event listeners for auto-save on safe boundaries */
   public static registerAutoSaveEvents(
     player: Player,

@@ -3,6 +3,7 @@ import { Camera } from "@babylonjs/core/Cameras/camera";
 import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { SSAO2RenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline";
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
+import { StorageAdapter } from "../core/StorageAdapter";
 
 export type GraphicsPreset = "low" | "medium" | "high" | "ultra";
 
@@ -116,6 +117,7 @@ export class VisualPipelineManager {
     this.scene = scene;
     this.camera = camera;
     this.applyPreset(initialPreset);
+    this.loadGraphicsSettings();
   }
 
   public applyPreset(preset: GraphicsPreset): void {
@@ -204,6 +206,20 @@ export class VisualPipelineManager {
 
   public getPreset(): GraphicsPreset {
     return this.currentPreset;
+  }
+
+  public saveGraphicsSettings(): void {
+    const data = { preset: this.currentPreset };
+    StorageAdapter.save("dungo_graphics_settings", data, 1, "settings");
+  }
+
+  public loadGraphicsSettings(): void {
+    const data = StorageAdapter.load<{ preset?: GraphicsPreset }>("dungo_graphics_settings", 1);
+    if (data && data.preset) {
+      if (["low", "medium", "high", "ultra"].includes(data.preset)) {
+        this.setPreset(data.preset);
+      }
+    }
   }
 
   public setBloomEnabled(enabled: boolean): void {

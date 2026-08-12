@@ -458,6 +458,13 @@ export class HUD {
     }, 2500);
   }
 
+  public setVisible(visible: boolean): void {
+    const rootControls = this.guiTexture.getChildren();
+    for (const control of rootControls) {
+      control.isVisible = visible;
+    }
+  }
+
   public update(deltaTime: number): void {
     // Cooldown overlay sweep for active signature skill slot 0
     const skill = this.player.equippedSkills[0];

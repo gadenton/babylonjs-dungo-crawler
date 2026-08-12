@@ -98,13 +98,21 @@ export class StorageAdapter {
 
   /** Get raw SavePayload without running migration, for metadata checks */
   public static getPayload<T = any>(key: string): SavePayload<T> | null {
-    const raw = this.getItem(key) ?? this.getItem(`${key}_bak`);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as SavePayload<T>;
-    } catch {
-      return null;
+    const rawPrimary = this.getItem(key);
+    if (rawPrimary) {
+      try {
+        return JSON.parse(rawPrimary) as SavePayload<T>;
+      } catch {}
     }
+
+    const rawBak = this.getItem(`${key}_bak`);
+    if (rawBak) {
+      try {
+        return JSON.parse(rawBak) as SavePayload<T>;
+      } catch {}
+    }
+
+    return null;
   }
 
   public static exists(key: string): boolean {
