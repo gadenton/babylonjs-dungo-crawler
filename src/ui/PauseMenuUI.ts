@@ -62,13 +62,20 @@ export class PauseMenuUI {
     titleText.height = "36px";
     mainStack.addControl(titleText);
 
-    const sep = new Rectangle("pauseSep");
-    sep.height = "2px";
-    sep.width = "80%";
-    sep.background = "#DAA520";
-    sep.thickness = 0;
-    sep.paddingBottom = "20px";
-    mainStack.addControl(sep);
+    // Separator line with clean container spacer
+    const sepContainer = new Rectangle("pauseSepContainer");
+    sepContainer.height = "20px";
+    sepContainer.width = "80%";
+    sepContainer.thickness = 0;
+    sepContainer.background = "rgba(0,0,0,0)";
+
+    const sepLine = new Rectangle("pauseSepLine");
+    sepLine.height = "2px";
+    sepLine.width = "100%";
+    sepLine.background = "#DAA520";
+    sepLine.thickness = 0;
+    sepContainer.addControl(sepLine);
+    mainStack.addControl(sepContainer);
 
     // Buttons Container
     const btnStack = new StackPanel("pauseBtnStack");

@@ -233,9 +233,15 @@ async function bootstrap(): Promise<void> {
     hud.setOnSaveButtonClick(() => saveLoadUI.toggle());
     inputManager.onInventoryToggleRequested.add(() => inventoryUI.toggle());
 
-    // Connect Save UI Toast Notifications
+    // Connect Save UI Toast Notifications & Main Menu Sync
     saveLoadUI.onNotification.add((msg) => {
       hud.showPickupNotification(msg, "#87CEFA");
+    });
+    saveLoadUI.onSaveStateModified.add(() => {
+      mainMenuUI.refreshSaveState();
+    });
+    saveLoadUI.onClosed.add(() => {
+      mainMenuUI.refreshSaveState();
     });
 
     const returnToTownHub = async () => {

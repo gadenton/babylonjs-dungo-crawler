@@ -146,6 +146,15 @@ describe("Stage 1 Core Architecture & Persistence APIs", () => {
       expect(recent?.metadata.level).toBe(5);
       expect(recent?.metadata.gold).toBe(500);
     });
+
+    it("should return null when all saves are nuked/cleared", () => {
+      const key = SaveManager.getSaveKey("slot_1");
+      StorageAdapter.save(key, { player: { level: 10 } }, 1, "slot_1");
+      expect(SaveManager.getMostRecentSave()).not.toBeNull();
+
+      StorageAdapter.clearAll();
+      expect(SaveManager.getMostRecentSave()).toBeNull();
+    });
   });
 
   describe("AudioManager Linear Volume & Persistence", () => {

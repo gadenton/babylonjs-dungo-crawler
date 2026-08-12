@@ -32,6 +32,8 @@ export class SaveLoadUI {
   // Notification Callback (e.g. to HUD toast)
   public onNotification: Observable<string> = new Observable<string>();
   public onLoadExecuted: Observable<string> = new Observable<string>();
+  public onSaveStateModified: Observable<void> = new Observable<void>();
+  public onClosed: Observable<void> = new Observable<void>();
 
   private getCurrentZone: () => "town_hub" | "dungeon";
   private getDungeonFloor: () => number;
@@ -306,6 +308,7 @@ export class SaveLoadUI {
       const msg = `Game successfully saved to ${slotId.toUpperCase()}!`;
       console.log(`[SaveLoadUI] ${msg}`);
       this.onNotification.notifyObservers(msg);
+      this.onSaveStateModified.notifyObservers();
       this.refreshSlotCards();
     } else {
       this.onNotification.notifyObservers(`Failed to save game to ${slotId}.`);
@@ -328,12 +331,14 @@ export class SaveLoadUI {
   private handleDelete(slotId: string): void {
     SaveManager.delete(slotId);
     this.onNotification.notifyObservers(`Save data in ${slotId.toUpperCase()} deleted.`);
+    this.onSaveStateModified.notifyObservers();
     this.refreshSlotCards();
   }
 
   private handleResetAll(): void {
     StorageAdapter.clearAll();
     this.onNotification.notifyObservers("All save progress has been reset!");
+    this.onSaveStateModified.notifyObservers();
     this.refreshSlotCards();
   }
 
@@ -399,6 +404,7 @@ export class SaveLoadUI {
     if (this.inputManager) {
       this.inputManager.setModalOpen("SaveLoadUI", false);
     }
+    this.onClosed.notifyObservers();
   }
 
   public toggle(): void {

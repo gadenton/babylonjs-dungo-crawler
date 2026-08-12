@@ -72,19 +72,24 @@ export class MainMenuUI {
     const subtitleBlock = new TextBlock("menuSubtitle", "— ARPG DUNGEON ADVENTURE —");
     subtitleBlock.color = "#87CEFA";
     subtitleBlock.fontSize = 14;
-    subtitleBlock.height = "30px";
-    subtitleBlock.paddingBottom = "15px";
+    subtitleBlock.height = "25px";
     subtitleBlock.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
     mainStack.addControl(subtitleBlock);
 
-    // Separator line
-    const sep = new Rectangle("menuSep");
-    sep.height = "2px";
-    sep.width = "85%";
-    sep.background = "#DAA520";
-    sep.thickness = 0;
-    sep.paddingBottom = "25px";
-    mainStack.addControl(sep);
+    // Separator line with clean container spacer
+    const sepContainer = new Rectangle("menuSepContainer");
+    sepContainer.height = "24px";
+    sepContainer.width = "85%";
+    sepContainer.thickness = 0;
+    sepContainer.background = "rgba(0,0,0,0)";
+
+    const sepLine = new Rectangle("menuSepLine");
+    sepLine.height = "2px";
+    sepLine.width = "100%";
+    sepLine.background = "#DAA520";
+    sepLine.thickness = 0;
+    sepContainer.addControl(sepLine);
+    mainStack.addControl(sepContainer);
 
     // Buttons Container
     const btnStack = new StackPanel("btnStack");
@@ -253,7 +258,12 @@ export class MainMenuUI {
       if (continueFocusItem) {
         continueFocusItem.enabled = false;
       }
+      if (this.currentFocusIdx === 0) {
+        this.currentFocusIdx = 1;
+      }
     }
+
+    this.updateFocusHighlight();
   }
 
   private playClickSFX(): void {
