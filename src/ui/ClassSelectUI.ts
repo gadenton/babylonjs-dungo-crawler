@@ -4,11 +4,17 @@ import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture
 import { Rectangle } from "@babylonjs/gui/2D/controls/rectangle";
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
 import { Button } from "@babylonjs/gui/2D/controls/button";
+import { InputText } from "@babylonjs/gui/2D/controls/inputText";
 import { StackPanel } from "@babylonjs/gui/2D/controls/stackPanel";
 import { Control } from "@babylonjs/gui/2D/controls/control";
 import { ArchetypeManager, ArchetypeType } from "../combat/Archetypes";
 import { AudioManager } from "../audio/AudioManager";
 import { InputManager } from "../core/InputManager";
+
+export interface CharacterCreationEvent {
+  archetype: ArchetypeType;
+  name: string;
+}
 
 export class ClassSelectUI {
   private scene: Scene;
@@ -19,8 +25,9 @@ export class ClassSelectUI {
   private rootPanel: Rectangle;
   private selectedArchetype: ArchetypeType = "tank";
   private classCards: Map<ArchetypeType, Rectangle> = new Map();
+  private nameInput: InputText | null = null;
 
-  public onArchetypeSelected: Observable<ArchetypeType> = new Observable<ArchetypeType>();
+  public onArchetypeSelected: Observable<CharacterCreationEvent> = new Observable<CharacterCreationEvent>();
   private isVisibleState: boolean = false;
 
   constructor(scene: Scene, audioManager?: AudioManager, inputManager?: InputManager) {
@@ -33,7 +40,7 @@ export class ClassSelectUI {
     // Root Container Modal
     this.rootPanel = new Rectangle("classSelectRoot");
     this.rootPanel.width = "780px";
-    this.rootPanel.height = "520px";
+    this.rootPanel.height = "560px";
     this.rootPanel.background = "rgba(10, 14, 23, 0.95)";
     this.rootPanel.color = "#DAA520";
     this.rootPanel.thickness = 3;
@@ -47,30 +54,30 @@ export class ClassSelectUI {
     mainStack.isVertical = true;
     mainStack.width = "100%";
     mainStack.height = "100%";
-    mainStack.paddingTop = "20px";
-    mainStack.paddingBottom = "20px";
+    mainStack.paddingTop = "15px";
+    mainStack.paddingBottom = "15px";
     this.rootPanel.addControl(mainStack);
 
     // Header Title
-    const titleBlock = new TextBlock("classTitle", "SELECT YOUR HERO CLASS");
+    const titleBlock = new TextBlock("classTitle", "CREATE YOUR HERO");
     titleBlock.color = "#FFD700";
     titleBlock.fontSize = 24;
     titleBlock.fontWeight = "bold";
-    titleBlock.height = "36px";
+    titleBlock.height = "32px";
     mainStack.addControl(titleBlock);
 
-    const subtitleBlock = new TextBlock("classSubtitle", "Choose your starting archetype for this dungeon expedition");
+    const subtitleBlock = new TextBlock("classSubtitle", "Choose starting class archetype & character name");
     subtitleBlock.color = "#87CEFA";
     subtitleBlock.fontSize = 13;
-    subtitleBlock.height = "24px";
-    subtitleBlock.paddingBottom = "15px";
+    subtitleBlock.height = "20px";
+    subtitleBlock.paddingBottom = "5px";
     mainStack.addControl(subtitleBlock);
 
     // Cards Grid (Horizontal Stack)
     const cardsStack = new StackPanel("cardsStack");
     cardsStack.isVertical = false;
     cardsStack.width = "94%";
-    cardsStack.height = "320px";
+    cardsStack.height = "310px";
     mainStack.addControl(cardsStack);
 
     const archetypes: ArchetypeType[] = ["tank", "healer", "mage", "physical_dps"];
@@ -78,22 +85,51 @@ export class ClassSelectUI {
       this.createClassCard(cardsStack, type);
     }
 
+    // Name Input & Embark Footer Row
+    const footerStack = new StackPanel("creationFooterStack");
+    footerStack.isVertical = false;
+    footerStack.width = "90%";
+    footerStack.height = "55px";
+    footerStack.paddingTop = "10px";
+    mainStack.addControl(footerStack);
+
+    const nameInput = new InputText("nameInput");
+    nameInput.width = "280px";
+    nameInput.height = "42px";
+    nameInput.color = "#00FFFF";
+    nameInput.background = "#0F172A";
+    nameInput.focusedBackground = "#1E293B";
+    nameInput.thickness = 1.5;
+    nameInput.placeholderText = "Enter Hero Name (Optional)";
+    nameInput.placeholderColor = "#64748B";
+    nameInput.fontSize = 13;
+    footerStack.addControl(nameInput);
+    this.nameInput = nameInput;
+
+    const spacer = new Rectangle("footerSpacer");
+    spacer.width = "20px";
+    spacer.thickness = 0;
+    footerStack.addControl(spacer);
+
     // Footer Embark Button
     const embarkBtn = Button.CreateSimpleButton("embarkBtn", "EMBARK ON ADVENTURE");
-    embarkBtn.width = "280px";
-    embarkBtn.height = "48px";
+    embarkBtn.width = "260px";
+    embarkBtn.height = "42px";
     embarkBtn.color = "#FFFFFF";
     embarkBtn.background = "#2E7D32";
     embarkBtn.cornerRadius = 8;
-    embarkBtn.fontSize = 16;
+    embarkBtn.fontSize = 15;
     embarkBtn.fontWeight = "bold";
-    embarkBtn.paddingTop = "10px";
     embarkBtn.onPointerClickObservable.add(() => {
       if (this.audioManager) this.audioManager.playUIClickSFX();
-      this.onArchetypeSelected.notifyObservers(this.selectedArchetype);
+      const customName = this.nameInput?.text.trim() ?? "";
+      this.onArchetypeSelected.notifyObservers({
+        archetype: this.selectedArchetype,
+        name: customName,
+      });
       this.hide();
     });
-    mainStack.addControl(embarkBtn);
+    footerStack.addControl(embarkBtn);
 
     this.updateCardSelections();
     this.setupKeyboardListeners();
@@ -209,9 +245,12 @@ export class ClassSelectUI {
         this.updateCardSelections();
         if (this.audioManager) this.audioManager.playUIClickSFX();
         e.preventDefault();
-      } else if (e.key === "Enter" || e.key === " ") {
+      } else if (e.key === "Enter") {
         if (this.audioManager) this.audioManager.playUIClickSFX();
-        this.onArchetypeSelected.notifyObservers(this.selectedArchetype);
+        this.onArchetypeSelected.notifyObservers({
+          archetype: this.selectedArchetype,
+          name: this.nameInput?.text.trim() ?? "",
+        });
         this.hide();
         e.preventDefault();
       } else if (e.key === "Escape") {

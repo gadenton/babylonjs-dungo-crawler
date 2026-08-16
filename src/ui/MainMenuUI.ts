@@ -101,14 +101,14 @@ export class MainMenuUI {
     // 1. CONTINUE BUTTON
     this.createContinueButton(btnStack);
 
-    // 2. NEW GAME BUTTON
-    this.createMenuButton(btnStack, "NEW GAME", "Start a fresh hero journey", () => {
+    // 2. NEW CHARACTER BUTTON
+    this.createMenuButton(btnStack, "NEW CHARACTER", "Create a new hero", () => {
       this.playClickSFX();
-      this.onNewGameRequested.notifyObservers();
+      this.handleNewGameClicked();
     });
 
-    // 3. LOAD SAVE BUTTON
-    this.createMenuButton(btnStack, "LOAD SAVE", "Select save slot manually", () => {
+    // 3. SELECT CHARACTER BUTTON
+    this.createMenuButton(btnStack, "SELECT CHARACTER", "View & manage character roster", () => {
       this.playClickSFX();
       this.onLoadSaveRequested.notifyObservers();
     });
@@ -244,15 +244,14 @@ export class MainMenuUI {
     if (this.recentSaveSlot && this.continueSubtext) {
       const meta = this.recentSaveSlot.metadata;
       const archName = meta.archetype.toUpperCase();
-      const slotName = this.recentSaveSlot.slotId.toUpperCase();
-      this.continueSubtext.text = `Lvl ${meta.level} ${archName} | Slot: ${slotName}`;
+      this.continueSubtext.text = `${meta.characterName} — Lvl ${meta.level} ${archName}`;
       this.continueSubtext.color = "#87CEFA";
 
       if (continueFocusItem) {
         continueFocusItem.enabled = true;
       }
     } else if (this.continueSubtext) {
-      this.continueSubtext.text = "No active save found";
+      this.continueSubtext.text = "No active character found";
       this.continueSubtext.color = "#6B7280";
 
       if (continueFocusItem) {
@@ -264,6 +263,109 @@ export class MainMenuUI {
     }
 
     this.updateFocusHighlight();
+  }
+
+  private capModalRoot: Rectangle | null = null;
+
+  private handleNewGameClicked(): void {
+    if (SaveManager.isCapReached()) {
+      this.showCapAlertModal();
+    } else {
+      this.onNewGameRequested.notifyObservers();
+    }
+  }
+
+  private showCapAlertModal(): void {
+    if (this.capModalRoot) {
+      this.capModalRoot.isVisible = true;
+      return;
+    }
+
+    const modal = new Rectangle("capModalRoot");
+    modal.width = "100%";
+    modal.height = "100%";
+    modal.background = "rgba(0, 0, 0, 0.75)";
+    modal.thickness = 0;
+    modal.isHitTestVisible = true;
+    this.guiTexture.addControl(modal);
+    this.capModalRoot = modal;
+
+    const card = new Rectangle("capCard");
+    card.width = "460px";
+    card.height = "250px";
+    card.background = "rgba(15, 23, 42, 0.98)";
+    card.color = "#F59E0B"; // Amber alert border
+    card.thickness = 2;
+    card.cornerRadius = 10;
+    card.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+    card.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    modal.addControl(card);
+
+    const stack = new StackPanel("capStack");
+    stack.isVertical = true;
+    stack.width = "90%";
+    stack.height = "90%";
+    stack.paddingTop = "15px";
+    card.addControl(stack);
+
+    const title = new TextBlock("capTitle", "🛑 CHARACTER LIMIT REACHED (10/10)");
+    title.color = "#F59E0B";
+    title.fontSize = 18;
+    title.fontWeight = "bold";
+    title.height = "32px";
+    title.isHitTestVisible = false;
+    stack.addControl(title);
+
+    const descStr = `You have reached the maximum cap of 10 characters.\nPlease delete a character from the roster before creating a new one.`;
+
+    const desc = new TextBlock("capDesc", descStr);
+    desc.color = "#D1D5DB";
+    desc.fontSize = 13;
+    desc.textWrapping = true;
+    desc.height = "65px";
+    desc.isHitTestVisible = false;
+    stack.addControl(desc);
+
+    const btnRow = new StackPanel("capBtnRow");
+    btnRow.isVertical = false;
+    btnRow.width = "100%";
+    btnRow.height = "50px";
+    btnRow.paddingTop = "10px";
+    stack.addControl(btnRow);
+
+    const closeBtn = Button.CreateSimpleButton("closeCapModalBtn", "CLOSE");
+    closeBtn.width = "140px";
+    closeBtn.height = "38px";
+    closeBtn.color = "#FFFFFF";
+    closeBtn.background = "#374151";
+    closeBtn.cornerRadius = 6;
+    closeBtn.fontSize = 14;
+    closeBtn.fontWeight = "bold";
+    closeBtn.onPointerClickObservable.add(() => {
+      this.playClickSFX();
+      modal.isVisible = false;
+    });
+    btnRow.addControl(closeBtn);
+
+    const spacer = new Rectangle("capBtnSpacer");
+    spacer.width = "15px";
+    spacer.thickness = 0;
+    btnRow.addControl(spacer);
+
+    const rosterBtn = Button.CreateSimpleButton("rosterCapBtn", "MANAGE ROSTER");
+    rosterBtn.width = "180px";
+    rosterBtn.height = "38px";
+    rosterBtn.color = "#FFFFFF";
+    rosterBtn.background = "#2563EB";
+    rosterBtn.cornerRadius = 6;
+    rosterBtn.fontSize = 14;
+    rosterBtn.fontWeight = "bold";
+    rosterBtn.onPointerClickObservable.add(() => {
+      this.playClickSFX();
+      modal.isVisible = false;
+      this.onLoadSaveRequested.notifyObservers();
+    });
+    btnRow.addControl(rosterBtn);
   }
 
   private playClickSFX(): void {

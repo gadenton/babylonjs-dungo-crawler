@@ -2,7 +2,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
 import { StorageAdapter } from "../core/StorageAdapter";
 import { Player } from "../entities/Player";
-import { ArchetypeType } from "../combat/Archetypes";
+import { ArchetypeManager, ArchetypeType } from "../combat/Archetypes";
 import { Item, EquipmentSlot } from "../entities/components/InventoryComponent";
 
 export interface SerializedVector3 {
@@ -16,6 +16,7 @@ export interface GameSaveStateV1 {
   timestamp: number;
   slotId: string;
   player: {
+    characterName?: string;
     level: number;
     xp: number;
     activeArchetypeId: ArchetypeType;
@@ -40,6 +41,7 @@ export interface GameSaveStateV1 {
 
 export interface SaveMetadata {
   slotId: string;
+  characterName: string;
   version: number;
   timestamp: number;
   level: number;
@@ -54,6 +56,7 @@ StorageAdapter.registerMigration(0, (oldData: any) => {
     timestamp: Date.now(),
     slotId: oldData?.slotId ?? "unknown",
     player: {
+      characterName: oldData?.player?.characterName ?? "Hero",
       level: oldData?.player?.level ?? 1,
       xp: oldData?.player?.xp ?? 0,
       activeArchetypeId: oldData?.player?.activeArchetypeId ?? "tank",
@@ -85,6 +88,17 @@ StorageAdapter.registerMigration(0, (oldData: any) => {
 export class SaveManager {
   public static readonly CURRENT_VERSION = 1;
   public static readonly SAVE_PREFIX = "dungo_save_";
+  public static readonly MAX_CHARACTERS = 10;
+
+  private static activeCharacterId: string | null = null;
+
+  public static getActiveCharacterId(): string | null {
+    return this.activeCharacterId;
+  }
+
+  public static setActiveCharacterId(characterId: string | null): void {
+    this.activeCharacterId = characterId;
+  }
 
   public static getSaveKey(slotId: string): string {
     return `${this.SAVE_PREFIX}${slotId}`;
@@ -98,7 +112,6 @@ export class SaveManager {
   ): GameSaveStateV1 {
     const pos = player.transformNode.position;
 
-    // Convert inventory equipment Map into plain JS dictionary object
     const equipmentObj: Record<EquipmentSlot, Item | null> = {
       [EquipmentSlot.MainHand]: player.inventory.equipment.get(EquipmentSlot.MainHand) ?? null,
       [EquipmentSlot.OffHand]: player.inventory.equipment.get(EquipmentSlot.OffHand) ?? null,
@@ -112,8 +125,9 @@ export class SaveManager {
     return {
       version: 1,
       timestamp: Date.now(),
-      slotId: "temp",
+      slotId: this.activeCharacterId ?? "temp",
       player: {
+        characterName: player.characterName,
         level: player.level,
         xp: player.xp,
         activeArchetypeId: player.activeArchetypeId,
@@ -137,7 +151,7 @@ export class SaveManager {
     };
   }
 
-  /** Save game state to a specified slot */
+  /** Save game state to a specified character ID */
   public static save(
     slotId: string,
     player: Player,
@@ -146,11 +160,52 @@ export class SaveManager {
   ): boolean {
     const state = this.captureState(player, currentZone, dungeonFloor);
     state.slotId = slotId;
+    this.activeCharacterId = slotId;
     const key = this.getSaveKey(slotId);
     return StorageAdapter.save<GameSaveStateV1>(key, state, this.CURRENT_VERSION, slotId);
   }
 
-  /** Load game state from a specified slot into Player entity */
+  /** Resolve a unique character name, appending an incremental number if duplicate */
+  public static resolveUniqueName(requestedName: string): string {
+    const existing = this.getAllCharacters().map((c) => c.metadata.characterName.toLowerCase());
+    let candidate = requestedName.trim();
+    if (!candidate) candidate = "Hero";
+
+    if (!existing.includes(candidate.toLowerCase())) {
+      return candidate;
+    }
+
+    let index = 2;
+    while (existing.includes(`${candidate} ${index}`.toLowerCase())) {
+      index++;
+    }
+    return `${candidate} ${index}`;
+  }
+
+  /** Create a brand new character and save to disk */
+  public static createCharacter(
+    player: Player,
+    archetype: ArchetypeType,
+    customName?: string
+  ): string | null {
+    if (this.isCapReached()) {
+      console.warn(`SaveManager: Character limit reached (${this.MAX_CHARACTERS}/${this.MAX_CHARACTERS}).`);
+      return null;
+    }
+
+    const defaultName = ArchetypeManager.getArchetype(archetype)?.name ?? "Hero";
+    const requested = customName && customName.trim().length > 0 ? customName.trim() : defaultName;
+    const uniqueName = this.resolveUniqueName(requested);
+
+    const safeSlug = uniqueName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const charId = `char_${safeSlug}`;
+
+    player.resetNewGame(archetype, uniqueName);
+    this.save(charId, player);
+    return charId;
+  }
+
+  /** Load game state from a specified character ID into Player entity */
   public static load(
     slotId: string,
     player: Player,
@@ -159,6 +214,13 @@ export class SaveManager {
     const key = this.getSaveKey(slotId);
     const saveState = StorageAdapter.load<GameSaveStateV1>(key, this.CURRENT_VERSION);
     if (!saveState) return false;
+
+    this.activeCharacterId = slotId;
+
+    // Restore Character Name
+    if (saveState.player.characterName) {
+      player.characterName = saveState.player.characterName;
+    }
 
     // 1. Restore Player Level & XP
     player.level = saveState.player.level;
@@ -183,7 +245,7 @@ export class SaveManager {
     player.inventory.onGoldChanged.notifyObservers(player.inventory.gold);
     player.inventory.onInventoryChanged.notifyObservers();
 
-    // 5. Restore Equipment (unequip current first, clear modifiers, then re-equip)
+    // 5. Restore Equipment
     for (const slot of Object.values(EquipmentSlot)) {
       player.stats.removeModifiersBySource(`equipment_${slot}`);
       player.inventory.equipment.set(slot, null);
@@ -201,7 +263,7 @@ export class SaveManager {
     player.health.setCurrentHp(saveState.player.currentHp);
     player.stats.setMana(saveState.player.currentMana);
 
-    // 7. Reset Position to Town Hub Spawn (Loading always returns player to Town Hub)
+    // 7. Reset Position to Town Hub Spawn
     if (
       saveState.player.position &&
       typeof saveState.player.position.x === "number" &&
@@ -233,6 +295,9 @@ export class SaveManager {
 
   public static delete(slotId: string): void {
     StorageAdapter.delete(this.getSaveKey(slotId));
+    if (this.activeCharacterId === slotId) {
+      this.activeCharacterId = null;
+    }
   }
 
   public static getMetadata(slotId: string): SaveMetadata | null {
@@ -240,31 +305,55 @@ export class SaveManager {
     const payload = StorageAdapter.getPayload<GameSaveStateV1>(key);
     if (!payload || !payload.data) return null;
 
+    const rawTs = (payload as any).timestamp;
+    const timestamp = typeof rawTs === "number" && !isNaN(rawTs) ? rawTs : -1;
+
+    const charName =
+      payload.data.player?.characterName ??
+      payload.data.player?.activeArchetypeId?.toUpperCase() ??
+      "Hero";
+
     return {
       slotId,
+      characterName: charName,
       version: payload.version,
-      timestamp: payload.timestamp,
+      timestamp,
       level: payload.data.player?.level ?? 1,
       archetype: payload.data.player?.activeArchetypeId ?? "tank",
       gold: payload.data.inventory?.gold ?? 0,
     };
   }
 
-  /** Scan save slots (autosave, slot_1, slot_2, slot_3) and return the save with the maximum timestamp */
-  public static getMostRecentSave(): { slotId: string; metadata: SaveMetadata } | null {
-    const slots = ["autosave", "slot_1", "slot_2", "slot_3"];
-    let maxTimestamp = -1;
-    let mostRecent: { slotId: string; metadata: SaveMetadata } | null = null;
+  /** Discover all saved characters from local storage */
+  public static getAllCharacters(): { slotId: string; metadata: SaveMetadata }[] {
+    const characterList: { slotId: string; metadata: SaveMetadata }[] = [];
+    const allKeys = StorageAdapter.getAllKeys(this.SAVE_PREFIX);
 
-    for (const slotId of slots) {
+    for (const slotId of allKeys) {
       const metadata = this.getMetadata(slotId);
-      if (metadata && typeof metadata.timestamp === "number" && metadata.timestamp > maxTimestamp) {
-        maxTimestamp = metadata.timestamp;
-        mostRecent = { slotId, metadata };
+      if (metadata) {
+        characterList.push({ slotId, metadata });
       }
     }
 
-    return mostRecent;
+    // Sort by timestamp descending (most recently played first)
+    characterList.sort((a, b) => b.metadata.timestamp - a.metadata.timestamp);
+
+    return characterList;
+  }
+
+  public static getCharacterCount(): number {
+    return this.getAllCharacters().length;
+  }
+
+  public static isCapReached(): boolean {
+    return this.getCharacterCount() >= this.MAX_CHARACTERS;
+  }
+
+  /** Return the most recently played character */
+  public static getMostRecentSave(): { slotId: string; metadata: SaveMetadata } | null {
+    const chars = this.getAllCharacters();
+    return chars.length > 0 ? chars[0] : null;
   }
 
   /** Register event listeners for auto-save on safe boundaries */
@@ -274,15 +363,15 @@ export class SaveManager {
     getDungeonFloor: () => number = () => 1
   ): () => void {
     const autoSave = () => {
-      this.save("autosave", player, getCurrentZone(), getDungeonFloor());
-      console.log("[SaveManager] Auto-save triggered successfully.");
+      const targetSlot = this.activeCharacterId ?? "autosave";
+      this.save(targetSlot, player, getCurrentZone(), getDungeonFloor());
+      console.log(`[SaveManager] Auto-save triggered for character ${targetSlot}.`);
     };
 
     const obs1 = player.onArchetypeSwapped.add(() => autoSave());
     const obs2 = player.inventory.onItemEquipped.add(() => autoSave());
     const obs3 = player.onLevelUp.add(() => autoSave());
 
-    // Return unbind/cleanup function
     return () => {
       if (obs1) player.onArchetypeSwapped.remove(obs1);
       if (obs2) player.inventory.onItemEquipped.remove(obs2);

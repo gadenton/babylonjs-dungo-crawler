@@ -115,6 +115,29 @@ export class StorageAdapter {
     return null;
   }
 
+  /** Get all save keys starting with prefix (stripped of prefix and .bak) */
+  public static getAllKeys(prefix: string = "dungo_save_"): string[] {
+    const keysSet = new Set<string>();
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && k.startsWith(prefix) && !k.endsWith("_bak")) {
+            keysSet.add(k.substring(prefix.length));
+          }
+        }
+      }
+    } catch {}
+
+    for (const k of this.memoryFallback.keys()) {
+      if (k.startsWith(prefix) && !k.endsWith("_bak")) {
+        keysSet.add(k.substring(prefix.length));
+      }
+    }
+
+    return Array.from(keysSet);
+  }
+
   public static exists(key: string): boolean {
     return this.getItem(key) !== null || this.getItem(`${key}_bak`) !== null;
   }

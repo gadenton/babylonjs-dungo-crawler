@@ -166,12 +166,55 @@ async function bootstrap(): Promise<void> {
     hud.setVisible(false);
     mainMenuUI.show();
 
+    const returnToTownHub = async () => {
+      enemies.forEach((e) => e.dispose());
+      enemies.length = 0;
+
+      activeLootDrops.forEach((d) => d.dispose());
+      activeLootDrops.length = 0;
+
+      if (navMeshManager) {
+        navMeshManager.dispose();
+        navMeshManager = null;
+      }
+      player.setNavMeshManager(null);
+
+      if (tileMap) {
+        tileMap.clearDungeon();
+        tileMap.dispose();
+        tileMap = null;
+      }
+
+      mapOverlay.setGrid(null as any);
+      mapOverlay.setOverlayVisible(false);
+      inDungeon = false;
+
+      const restoredTown = await buildTownHub();
+      player.isAlive = true;
+      player.transformNode.position = restoredTown.spawnPoint.clone();
+      cameraRig.attachToTarget(player.transformNode);
+    };
+
+    const handleCharacterLoad = async (slotId: string) => {
+      SaveManager.load(slotId, player);
+      gameStateManager.setPaused(false);
+      gameStateManager.setState("TOWN_HUB");
+
+      mainMenuUI.hide();
+      pauseMenuUI.hide();
+      saveLoadUI.hide();
+      hud.setVisible(true);
+
+      await returnToTownHub();
+
+      hud.update(0);
+      hud.showPickupNotification(`Playing Character: ${player.characterName}`, "#10B981");
+      mainMenuUI.refreshSaveState();
+    };
+
     // Main Menu Observables
     mainMenuUI.onContinueRequested.add((slotId) => {
-      SaveManager.load(slotId, player);
-      mainMenuUI.hide();
-      hud.setVisible(true);
-      gameStateManager.setState("TOWN_HUB");
+      handleCharacterLoad(slotId);
     });
 
     mainMenuUI.onNewGameRequested.add(() => {
@@ -187,13 +230,19 @@ async function bootstrap(): Promise<void> {
       settingsUI.show();
     });
 
-    classSelectUI.onArchetypeSelected.add((archetype) => {
-      player.unlockedArchetypes = new Set([archetype]);
-      player.setArchetype(archetype);
-      SaveManager.save("autosave", player);
-      classSelectUI.hide();
-      hud.setVisible(true);
-      gameStateManager.setState("TOWN_HUB");
+    classSelectUI.onArchetypeSelected.add(async (evt) => {
+      const charId = SaveManager.createCharacter(player, evt.archetype, evt.name);
+      if (charId) {
+        gameStateManager.setPaused(false);
+        gameStateManager.setState("TOWN_HUB");
+        mainMenuUI.hide();
+        pauseMenuUI.hide();
+        classSelectUI.hide();
+        hud.setVisible(true);
+        await returnToTownHub();
+        mainMenuUI.refreshSaveState();
+        hud.showPickupNotification(`Created Hero: ${player.characterName}`, "#10B981");
+      }
     });
 
     // Pause Menu Observables
@@ -209,8 +258,9 @@ async function bootstrap(): Promise<void> {
       settingsUI.show();
     });
 
-    pauseMenuUI.onMainMenuRequested.add(() => {
-      returnToTownHub();
+    pauseMenuUI.onMainMenuRequested.add(async () => {
+      await returnToTownHub();
+      gameStateManager.setPaused(false);
       hud.setVisible(false);
       mainMenuUI.show();
       gameStateManager.setState("MAIN_MENU");
@@ -246,36 +296,8 @@ async function bootstrap(): Promise<void> {
       mainMenuUI.refreshSaveState();
     });
 
-    const returnToTownHub = async () => {
-      enemies.forEach((e) => e.dispose());
-      enemies.length = 0;
-
-      activeLootDrops.forEach((d) => d.dispose());
-      activeLootDrops.length = 0;
-
-      if (navMeshManager) {
-        navMeshManager.dispose();
-        navMeshManager = null;
-      }
-      player.setNavMeshManager(null);
-
-      if (tileMap) {
-        tileMap.clearDungeon();
-        tileMap.dispose();
-        tileMap = null;
-      }
-
-      mapOverlay.setGrid(null as any);
-      mapOverlay.setOverlayVisible(false);
-      inDungeon = false;
-
-      const restoredTown = await buildTownHub();
-      player.transformNode.position = restoredTown.spawnPoint.clone();
-      hud.showPickupNotification("Returned to Town Hub", "#10B981");
-    };
-
-    saveLoadUI.onLoadExecuted.add(() => {
-      returnToTownHub();
+    saveLoadUI.onLoadExecuted.add((slotId) => {
+      handleCharacterLoad(slotId);
     });
 
     // Wire Auto-Save Listeners

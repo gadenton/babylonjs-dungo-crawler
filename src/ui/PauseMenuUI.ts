@@ -91,8 +91,8 @@ export class PauseMenuUI {
       this.hide();
     });
 
-    // 2. SAVE & LOAD
-    this.createPauseButton(btnStack, "SAVE & LOAD", "#1565C0", () => {
+    // 2. CHARACTER ROSTER
+    this.createPauseButton(btnStack, "CHARACTER ROSTER", "#1565C0", () => {
       this.playClickSFX();
       this.onSaveLoadRequested.notifyObservers();
       this.hide();

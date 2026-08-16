@@ -14,7 +14,7 @@ import { InputManager } from "../core/InputManager";
 import { NavMeshManager } from "../dungeon/NavMeshManager";
 import { JuiceOverlay } from "../ui/JuiceOverlay";
 import { HealthComponent } from "./components/HealthComponent";
-import { InventoryComponent } from "./components/InventoryComponent";
+import { InventoryComponent, EquipmentSlot } from "./components/InventoryComponent";
 import { StatsComponent, StatType } from "./components/StatsComponent";
 import { Enemy } from "./Enemy";
 import { Entity } from "./Entity";
@@ -26,6 +26,7 @@ export class Player extends Entity {
   public inventory: InventoryComponent;
 
   // Progression & Archetype State
+  public characterName: string = "Hero";
   public level: number = 1;
   public xp: number = 0;
   public activeArchetypeId: ArchetypeType = "tank";
@@ -117,6 +118,30 @@ export class Player extends Entity {
     this.setArchetype("tank");
 
     this.setupEllipsoidCollision();
+  }
+
+  public resetNewGame(startingArchetype: ArchetypeType, customName?: string): void {
+    const defaultName = ArchetypeManager.getArchetype(startingArchetype)?.name ?? "Hero";
+    this.characterName = customName && customName.trim().length > 0 ? customName.trim() : defaultName;
+    this.level = 1;
+    this.xp = 0;
+    this.isAlive = true;
+    this.unlockedArchetypes = new Set<ArchetypeType>([startingArchetype]);
+    this.setArchetype(startingArchetype);
+
+    this.talentTree = new TalentTree(this.stats, startingArchetype);
+
+    this.inventory.gold = 0;
+    this.inventory.items = [];
+    for (const slot of Object.values(EquipmentSlot)) {
+      this.stats.removeModifiersBySource(`equipment_${slot}`);
+      this.inventory.equipment.set(slot, null);
+    }
+    this.inventory.onGoldChanged.notifyObservers(0);
+    this.inventory.onInventoryChanged.notifyObservers();
+
+    this.health.setCurrentHp(this.stats.maxHealth);
+    this.stats.setMana(this.stats.maxMana);
   }
 
   public async loadModelAsync(url: string): Promise<void> {
